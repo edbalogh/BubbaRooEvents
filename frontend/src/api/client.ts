@@ -94,6 +94,38 @@ export interface CategoryInfo {
   parent_id: number | null
 }
 
+export interface EventSourceInfo {
+  id: number
+  slug: string
+  name: string
+  source_type: string
+  description: string | null
+  url: string | null
+  is_local: boolean
+  coverage_cities: string | null
+}
+
+export interface UserSourcePref {
+  source_id: number
+  source_slug: string
+  source_name: string
+  source_type: string
+  is_local: boolean
+  preference: string  // liked, disliked, disabled
+}
+
+export interface DiscoveredSource {
+  name: string
+  url: string
+  source_type: string
+  description: string
+  city: string
+  state: string | null
+  likely_categories: string[] | null
+  has_ical_feed: boolean
+  has_api: boolean
+}
+
 export const api = {
   // Events
   searchEvents(params: Record<string, string>): Promise<EventListResponse> {
@@ -173,6 +205,29 @@ export const api = {
   // Categories
   getCategories(): Promise<CategoryInfo[]> {
     return request('/categories')
+  },
+
+  // Sources
+  getSources(city?: string): Promise<EventSourceInfo[]> {
+    const query = city ? `?city=${encodeURIComponent(city)}` : ''
+    return request(`/sources${query}`)
+  },
+
+  discoverSources(city: string, state?: string): Promise<DiscoveredSource[]> {
+    const params = new URLSearchParams({ city })
+    if (state) params.set('state', state)
+    return request(`/sources/discover?${params}`)
+  },
+
+  getSourcePreferences(): Promise<UserSourcePref[]> {
+    return request('/sources/me/preferences')
+  },
+
+  updateSourcePreference(sourceId: number, preference: string): Promise<void> {
+    return request('/sources/me/preferences', {
+      method: 'PUT',
+      body: JSON.stringify({ source_id: sourceId, preference }),
+    })
   },
 
   // Seed (dev only)

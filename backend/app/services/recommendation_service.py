@@ -150,6 +150,30 @@ async def get_dismissed_event_ids(db: AsyncSession, user_id: UUID) -> set[UUID]:
     return {row.event_id for row in result.all()}
 
 
+async def get_user_source_preferences(db: AsyncSession, user_id: UUID) -> dict[str, str]:
+    """Get user source preferences as {source_slug: preference}.
+
+    Returns dict like {"ticketmaster": "liked", "meetup": "disabled"}.
+    """
+    from app.models.source import EventSource, UserSourcePreference
+
+    result = await db.execute(
+        select(EventSource.slug, UserSourcePreference.preference)
+        .join(EventSource, UserSourcePreference.source_id == EventSource.id)
+        .where(UserSourcePreference.user_id == user_id)
+    )
+    return {row.slug: row.preference for row in result.all()}
+
+
+# Source preference modifiers for scoring
+SOURCE_PREF_MODIFIERS = {
+    "liked": 0.15,      # boost liked sources
+    "disliked": -0.15,   # reduce disliked sources
+    "disabled": None,    # filter out entirely
+    # "neutral" = no modifier (not stored in DB)
+}
+
+
 async def recommend_events(
     db: AsyncSession,
     user: User,
@@ -158,10 +182,11 @@ async def recommend_events(
     max_distance_miles: float = 25.0,
 ) -> list[ScoredEvent]:
     """
-    Generate personalized event recommendations using three-signal scoring:
+    Generate personalized event recommendations using four signals:
     1. Category affinity (user preference weights)
-    2. Embedding similarity (placeholder until Phase 2b)
+    2. Embedding similarity (placeholder until embeddings are generated)
     3. Popularity (cross-user interaction counts)
+    4. Source preference (liked/disliked/disabled sources)
     + Distance penalty
     """
     # Fetch candidate events (active, upcoming)
@@ -184,6 +209,12 @@ async def recommend_events(
     # Filter out dismissed events
     dismissed = await get_dismissed_event_ids(db, user.id)
     candidates = [e for e in candidates if e.id not in dismissed]
+
+    # Filter out events from disabled sources
+    source_prefs = await get_user_source_preferences(db, user.id)
+    disabled_sources = {slug for slug, pref in source_prefs.items() if pref == "disabled"}
+    if disabled_sources:
+        candidates = [e for e in candidates if e.source not in disabled_sources]
 
     event_ids = [e.id for e in candidates]
 
@@ -214,12 +245,21 @@ async def recommend_events(
         # Distance penalty
         dist_penalty = compute_distance_penalty(event, user, max_distance_miles)
 
+        # Signal 4: Source preference modifier
+        source_modifier = 0.0
+        source_pref = source_prefs.get(event.source)
+        if source_pref and source_pref in SOURCE_PREF_MODIFIERS:
+            mod = SOURCE_PREF_MODIFIERS[source_pref]
+            if mod is not None:
+                source_modifier = mod
+
         # Combined score
         total = (
             W_CATEGORY * cat_score
             + W_EMBEDDING * embedding_score
             + W_POPULARITY * pop_score
             + dist_penalty
+            + source_modifier
         )
 
         scored.append(ScoredEvent(

@@ -1,0 +1,40 @@
+"""Event source registry and user source preferences."""
+
+import uuid
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+
+
+class EventSource(Base):
+    """Registry of all event data sources (APIs, scrapers, etc.)."""
+
+    __tablename__ = "event_sources"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(20), nullable=False)  # api, scraper, manual
+    description: Mapped[str | None] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)  # website URL for this source
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_local: Mapped[bool] = mapped_column(Boolean, default=False)  # local/community source vs national
+    coverage_cities: Mapped[str | None] = mapped_column(Text)  # comma-separated cities, null = nationwide
+    default_trust_score: Mapped[float] = mapped_column(Float, default=1.0)  # quality signal
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserSourcePreference(Base):
+    """User preferences for event sources: like, dislike, or turn off."""
+
+    __tablename__ = "user_source_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    preference: Mapped[str] = mapped_column(String(20), nullable=False)  # liked, disliked, disabled
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
