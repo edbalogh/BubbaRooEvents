@@ -9,6 +9,8 @@ export default function EventDetail() {
   const [event, setEvent] = useState<Event | null>(null)
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
+  const [explanation, setExplanation] = useState<string | null>(null)
+  const [loadingExplanation, setLoadingExplanation] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -130,6 +132,13 @@ export default function EventDetail() {
           </div>
         )}
 
+        {explanation && (
+          <div className="bg-purple-50 border border-purple-200 rounded-xl p-4">
+            <p className="text-sm font-medium text-purple-800 mb-1">Why we think you'll like this</p>
+            <p className="text-sm text-purple-700">{explanation}</p>
+          </div>
+        )}
+
         <div className="flex gap-3 pt-4">
           {event.url && (
             <a
@@ -142,16 +151,36 @@ export default function EventDetail() {
             </a>
           )}
           {isAuthenticated && (
-            <button
-              onClick={handleSave}
-              className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                saved
-                  ? 'bg-green-100 text-green-700 border border-green-300'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
-              }`}
-            >
-              {saved ? 'Saved' : 'Save Event'}
-            </button>
+            <>
+              <button
+                onClick={handleSave}
+                className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+                  saved
+                    ? 'bg-green-100 text-green-700 border border-green-300'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300'
+                }`}
+              >
+                {saved ? 'Saved' : 'Save Event'}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!id || explanation) return
+                  setLoadingExplanation(true)
+                  try {
+                    const result = await api.explainRecommendation(id)
+                    setExplanation(result.explanation)
+                  } catch {
+                    setExplanation('Unable to generate explanation right now.')
+                  } finally {
+                    setLoadingExplanation(false)
+                  }
+                }}
+                disabled={loadingExplanation}
+                className="px-6 py-3 bg-purple-50 text-purple-700 border border-purple-200 rounded-lg font-medium hover:bg-purple-100 transition-colors disabled:opacity-50"
+              >
+                {loadingExplanation ? 'Thinking...' : 'Why this?'}
+              </button>
+            </>
           )}
         </div>
       </div>

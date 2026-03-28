@@ -292,6 +292,48 @@ export const api = {
     return request(`/me/notifications/history${query}`)
   },
 
+  // AI / Trip Planning
+  explainRecommendation(eventId: string): Promise<{
+    event_id: string
+    event_title: string
+    explanation: string
+    score: number
+    score_breakdown: { category_affinity: number; embedding_similarity: number; popularity: number; distance_penalty: number }
+  }> {
+    return request(`/recommendations/explain/${eventId}`)
+  },
+
+  exploreTrip(data: {
+    city: string
+    date_from: string
+    date_to: string
+    interests?: string[]
+  }): Promise<{
+    city: string
+    dates: string
+    plan: string
+    events: Array<{
+      id: string
+      title: string
+      description: string | null
+      venue_name: string | null
+      city: string | null
+      starts_at: string | null
+      price_min: number | null
+      price_max: number | null
+      url: string | null
+      image_url: string | null
+      score: number
+      categories: string[]
+    }>
+    total_events: number
+  }> {
+    return request('/trips/explore', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
   // Seed (dev only)
   seedData(city: string = 'Austin'): Promise<{ events_seeded: number }> {
     return request(`/seed?city=${encodeURIComponent(city)}`, { method: 'POST' })

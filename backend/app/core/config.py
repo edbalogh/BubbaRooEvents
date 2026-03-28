@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     seatgeek_client_id: str = ""
     seatgeek_client_secret: str = ""
 
+    # AI (Claude API)
+    anthropic_api_key: str = ""
+
+    # Slack bot
+    slack_signing_secret: str = ""
+    slack_bot_token: str = ""
+
     # Notifications - Email (Resend)
     resend_api_key: str = ""
     notification_from_email: str = "events@bubbaroo.app"

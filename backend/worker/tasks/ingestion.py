@@ -12,6 +12,7 @@ from app.ingestion.eventbrite import EventbriteAdapter
 from app.ingestion.ingest_service import upsert_events
 from app.ingestion.meetup import MeetupAdapter
 from app.ingestion.mock_data import generate_mock_events
+from app.ingestion.seatgeek import SeatGeekAdapter
 from app.ingestion.ticketmaster import TicketmasterAdapter
 from worker.celery_app import celery_app
 
@@ -82,6 +83,23 @@ async def _run_bandsintown_ingestion():
     return await _run_adapter_ingestion(adapter, "bandsintown")
 
 
+async def _run_seatgeek_ingestion():
+    adapter = SeatGeekAdapter()
+    today = datetime.now(UTC).date()
+    date_to = today + timedelta(days=30)
+
+    total = 0
+    async with _session_factory() as db:
+        for city in INGEST_CITIES:
+            try:
+                events = await adapter.fetch_events(city, today, date_to)
+                count = await upsert_events(db, events)
+                total += count
+            except Exception as e:
+                logger.error(f"[seatgeek] {city} failed: {e}")
+    return total
+
+
 async def _run_mock_ingestion():
     total = 0
     async with _session_factory() as db:
@@ -123,6 +141,15 @@ def ingest_bandsintown():
     """Ingest concert/live music events from Bandsintown."""
     count = asyncio.run(_run_bandsintown_ingestion())
     return f"Ingested {count} events from Bandsintown"
+
+
+@celery_app.task(name="worker.tasks.ingestion.ingest_seatgeek")
+def ingest_seatgeek():
+    """Ingest events from SeatGeek API (concerts, sports, theatre)."""
+    if not settings.seatgeek_client_id:
+        return "Skipped: No SeatGeek client_id configured"
+    count = asyncio.run(_run_seatgeek_ingestion())
+    return f"Ingested {count} events from SeatGeek"
 
 
 @celery_app.task(name="worker.tasks.ingestion.ingest_mock_events")

@@ -29,6 +29,10 @@ celery_app.conf.update(
             "task": "worker.tasks.ingestion.ingest_eventbrite",
             "schedule": 1800.0,  # every 30 minutes
         },
+        "ingest-seatgeek-events": {
+            "task": "worker.tasks.ingestion.ingest_seatgeek",
+            "schedule": 1800.0,  # every 30 minutes
+        },
         "ingest-bandsintown-events": {
             "task": "worker.tasks.ingestion.ingest_bandsintown",
             "schedule": 3600.0,  # every hour

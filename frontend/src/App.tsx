@@ -6,6 +6,7 @@ import EventDetail from './pages/EventDetail'
 import ForYou from './pages/ForYou'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
+import TripPlanner from './pages/TripPlanner'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
           <Route path="/" element={<Home />} />
           <Route path="/for-you" element={<ForYou />} />
           <Route path="/events/:id" element={<EventDetail />} />
+          <Route path="/trip-planner" element={<TripPlanner />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/login" element={<Login />} />
         </Routes>

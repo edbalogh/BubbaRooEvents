@@ -23,6 +23,9 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <Link to="/for-you" className="text-gray-600 hover:text-gray-900">
                     For You
                   </Link>
+                  <Link to="/trip-planner" className="text-gray-600 hover:text-gray-900">
+                    Trip Planner
+                  </Link>
                   <Link to="/settings" className="text-gray-600 hover:text-gray-900">
                     Settings
                   </Link>
