@@ -19,6 +19,18 @@ class Settings(BaseSettings):
     seatgeek_client_id: str = ""
     seatgeek_client_secret: str = ""
 
+    # Notifications - Email (Resend)
+    resend_api_key: str = ""
+    notification_from_email: str = "events@bubbaroo.app"
+
+    # Notifications - SMS (Twilio)
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_phone_number: str = ""
+
+    # Notifications - Push (Firebase)
+    firebase_credentials_path: str = ""
+
     # App
     app_env: str = "development"
     use_mock_data: bool = True

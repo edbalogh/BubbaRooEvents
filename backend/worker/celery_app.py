@@ -6,7 +6,7 @@ celery_app = Celery(
     "bubbaroo",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["worker.tasks.ingestion", "worker.tasks.embeddings"],
+    include=["worker.tasks.ingestion", "worker.tasks.embeddings", "worker.tasks.notifications"],
 )
 
 celery_app.conf.update(
@@ -42,6 +42,23 @@ celery_app.conf.update(
         "generate-embeddings": {
             "task": "worker.tasks.embeddings.generate_embeddings",
             "schedule": 3600.0,  # every hour
+        },
+        # --- Notifications ---
+        "send-tonight-notifications": {
+            "task": "worker.tasks.notifications.send_tonight_notifications",
+            "schedule": 3600.0,  # every hour (filtered to evening in service)
+        },
+        "send-ticket-alerts": {
+            "task": "worker.tasks.notifications.send_ticket_alerts",
+            "schedule": 1800.0,  # every 30 min (matches ingestion cycle)
+        },
+        "send-new-match-notifications": {
+            "task": "worker.tasks.notifications.send_new_match_notifications",
+            "schedule": 86400.0,  # once per day
+        },
+        "send-weekly-digest": {
+            "task": "worker.tasks.notifications.send_weekly_digest",
+            "schedule": 604800.0,  # once per week
         },
     },
 )

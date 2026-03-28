@@ -114,6 +114,32 @@ export interface UserSourcePref {
   preference: string  // liked, disliked, disabled
 }
 
+export interface NotificationChannel {
+  id: string
+  channel_type: string
+  channel_address: string
+  is_active: boolean
+}
+
+export interface NotificationPrefs {
+  quiet_hours_start: string | null
+  quiet_hours_end: string | null
+  max_per_day: number
+  enabled_types: string[]
+}
+
+export interface NotificationHistoryItem {
+  id: string
+  channel: string
+  notification_type: string
+  status: string
+  sent_at: string | null
+  payload: {
+    subject: string
+    event_title: string | null
+  }
+}
+
 export interface DiscoveredSource {
   name: string
   url: string
@@ -228,6 +254,42 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ source_id: sourceId, preference }),
     })
+  },
+
+  // Notifications
+  getNotificationChannels(): Promise<NotificationChannel[]> {
+    return request('/me/notifications/channels')
+  },
+
+  addNotificationChannel(channelType: string, channelAddress: string): Promise<NotificationChannel> {
+    return request('/me/notifications/channels', {
+      method: 'POST',
+      body: JSON.stringify({ channel_type: channelType, channel_address: channelAddress }),
+    })
+  },
+
+  toggleNotificationChannel(channelId: string): Promise<{ id: string; is_active: boolean }> {
+    return request(`/me/notifications/channels/${channelId}/toggle`, { method: 'PUT' })
+  },
+
+  removeNotificationChannel(channelId: string): Promise<void> {
+    return request(`/me/notifications/channels/${channelId}`, { method: 'DELETE' })
+  },
+
+  getNotificationPreferences(): Promise<NotificationPrefs> {
+    return request('/me/notifications/preferences')
+  },
+
+  updateNotificationPreferences(prefs: Partial<NotificationPrefs>): Promise<NotificationPrefs> {
+    return request('/me/notifications/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(prefs),
+    })
+  },
+
+  getNotificationHistory(limit?: number): Promise<NotificationHistoryItem[]> {
+    const query = limit ? `?limit=${limit}` : ''
+    return request(`/me/notifications/history${query}`)
   },
 
   // Seed (dev only)
