@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../api/client'
 
@@ -21,7 +22,29 @@ function formatPrice(min: number | null, max: number | null, currency: string): 
   return `$${min ?? max}`
 }
 
-export default function EventCard({ event }: { event: Event }) {
+interface EventCardProps {
+  event: Event
+  showActions?: boolean
+  onSave?: (eventId: string) => void
+  onDismiss?: (eventId: string) => void
+}
+
+export default function EventCard({ event, showActions, onSave, onDismiss }: EventCardProps) {
+  const [saved, setSaved] = useState(false)
+
+  const handleSave = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setSaved(true)
+    onSave?.(event.id)
+  }
+
+  const handleDismiss = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    onDismiss?.(event.id)
+  }
+
   return (
     <Link
       to={`/events/${event.id}`}
@@ -64,6 +87,27 @@ export default function EventCard({ event }: { event: Event }) {
             </div>
           )}
         </div>
+
+        {showActions && (
+          <div className="flex gap-2 pt-2 border-t border-gray-100">
+            <button
+              onClick={handleSave}
+              className={`flex-1 text-sm py-1.5 rounded-lg transition-colors ${
+                saved
+                  ? 'bg-green-50 text-green-700 border border-green-200'
+                  : 'bg-gray-50 text-gray-600 hover:bg-brand-50 hover:text-brand-700 border border-gray-200'
+              }`}
+            >
+              {saved ? 'Saved!' : 'Save'}
+            </button>
+            <button
+              onClick={handleDismiss}
+              className="flex-1 text-sm py-1.5 rounded-lg bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500 border border-gray-200 transition-colors"
+            >
+              Not interested
+            </button>
+          </div>
+        )}
       </div>
     </Link>
   )

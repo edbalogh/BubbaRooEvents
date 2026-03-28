@@ -18,6 +18,16 @@ export default function Layout({ children }: { children: ReactNode }) {
               <Link to="/" className="text-gray-600 hover:text-gray-900">
                 Discover
               </Link>
+              {isAuthenticated && (
+                <>
+                  <Link to="/for-you" className="text-gray-600 hover:text-gray-900">
+                    For You
+                  </Link>
+                  <Link to="/settings" className="text-gray-600 hover:text-gray-900">
+                    Settings
+                  </Link>
+                </>
+              )}
               {isAuthenticated ? (
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-gray-500">{user?.display_name}</span>

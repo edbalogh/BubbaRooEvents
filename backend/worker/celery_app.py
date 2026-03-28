@@ -6,7 +6,7 @@ celery_app = Celery(
     "bubbaroo",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["worker.tasks.ingestion"],
+    include=["worker.tasks.ingestion", "worker.tasks.embeddings"],
 )
 
 celery_app.conf.update(
@@ -23,6 +23,10 @@ celery_app.conf.update(
         "ingest-mock-events": {
             "task": "worker.tasks.ingestion.ingest_mock_events",
             "schedule": 3600.0,  # every hour (development only)
+        },
+        "generate-embeddings": {
+            "task": "worker.tasks.embeddings.generate_embeddings",
+            "schedule": 3600.0,  # every hour
         },
     },
 )

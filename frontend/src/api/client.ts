@@ -65,6 +65,35 @@ export interface TokenResponse {
   user: User
 }
 
+export interface RecommendedEvent extends Event {
+  score: number
+  score_breakdown: {
+    category_affinity: number
+    embedding_similarity: number
+    popularity: number
+    distance_penalty: number
+  }
+}
+
+export interface CategoryPreference {
+  category_id: number
+  category_name: string
+  category_slug: string
+  weight: number
+}
+
+export interface PreferencesResponse {
+  categories: CategoryPreference[]
+  max_distance_miles: number
+}
+
+export interface CategoryInfo {
+  id: number
+  name: string
+  slug: string
+  parent_id: number | null
+}
+
 export const api = {
   // Events
   searchEvents(params: Record<string, string>): Promise<EventListResponse> {
@@ -95,13 +124,55 @@ export const api = {
     })
   },
 
+  // Recommendations
+  getRecommendations(params?: Record<string, string>): Promise<RecommendedEvent[]> {
+    const query = params ? `?${new URLSearchParams(params).toString()}` : ''
+    return request(`/recommendations${query}`)
+  },
+
   // Preferences
+  getPreferences(): Promise<PreferencesResponse> {
+    return request('/me/preferences')
+  },
+
+  updatePreferences(updates: { category_slug: string; weight: number }[]): Promise<void> {
+    return request('/me/preferences', {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    })
+  },
+
+  updateDistancePreference(miles: number): Promise<void> {
+    return request('/me/preferences/distance', {
+      method: 'PUT',
+      body: JSON.stringify(miles),
+      headers: { 'Content-Type': 'application/json' },
+    })
+  },
+
+  // Interactions
   saveEvent(eventId: string): Promise<void> {
     return request(`/me/events/${eventId}/save`, { method: 'POST' })
   },
 
   unsaveEvent(eventId: string): Promise<void> {
     return request(`/me/events/${eventId}/save`, { method: 'DELETE' })
+  },
+
+  logInteraction(eventId: string, interactionType: string): Promise<void> {
+    return request(`/me/events/${eventId}/interact`, {
+      method: 'POST',
+      body: JSON.stringify({ interaction_type: interactionType }),
+    })
+  },
+
+  getSavedEvents(): Promise<{ event_id: string; notes: string | null; created_at: string }[]> {
+    return request('/me/saved-events')
+  },
+
+  // Categories
+  getCategories(): Promise<CategoryInfo[]> {
+    return request('/categories')
   },
 
   // Seed (dev only)
