@@ -7,14 +7,18 @@ interface SearchBarProps {
 
 const CATEGORIES = [
   { label: 'All', value: '' },
-  { label: 'Music', value: 'music' },
+  { label: 'Concerts', value: 'music' },
   { label: 'Sports', value: 'sports' },
+  { label: 'Conventions', value: 'conventions' },
   { label: 'Comedy', value: 'comedy' },
-  { label: 'Arts', value: 'arts' },
-  { label: 'Food', value: 'food' },
-  { label: 'Technology', value: 'technology' },
+  { label: 'Theatre', value: 'theatre' },
+  { label: 'Food & Drink', value: 'food' },
+  { label: 'Festivals', value: 'festival' },
+  { label: 'Tech', value: 'technology' },
   { label: 'Outdoor', value: 'outdoor' },
   { label: 'Fitness', value: 'fitness' },
+  { label: 'Family', value: 'family' },
+  { label: 'Nightlife', value: 'nightlife' },
 ]
 
 export default function SearchBar({ onSearch, initialCity = 'Austin' }: SearchBarProps) {

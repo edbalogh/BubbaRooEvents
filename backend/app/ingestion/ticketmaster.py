@@ -70,15 +70,39 @@ class TicketmasterAdapter:
         )
 
         # Extract categories from classifications
+        # Ticketmaster segments: Music, Sports, Arts & Theatre, Film, Miscellaneous
+        # We map these + genres to our broader category taxonomy
+        SEGMENT_MAP = {
+            "music": ["music", "concert"],
+            "sports": ["sports"],
+            "arts & theatre": ["arts", "theatre"],
+            "film": ["film", "entertainment"],
+            "miscellaneous": [],
+        }
         classifications = raw.get("classifications", [])
         categories = []
         for c in classifications:
-            segment = c.get("segment", {}).get("name")
-            genre = c.get("genre", {}).get("name")
+            segment = c.get("segment", {}).get("name", "").strip()
+            genre = c.get("genre", {}).get("name", "").strip()
+            subgenre = c.get("subGenre", {}).get("name", "").strip()
+            event_type = c.get("type", {}).get("name", "").strip()
+
             if segment and segment != "Undefined":
-                categories.append(segment.lower())
+                mapped = SEGMENT_MAP.get(segment.lower(), [segment.lower()])
+                categories.extend(mapped)
             if genre and genre != "Undefined":
                 categories.append(genre.lower())
+            if subgenre and subgenre != "Undefined" and subgenre.lower() != genre.lower():
+                categories.append(subgenre.lower())
+            # Ticketmaster "type" can indicate convention, festival, expo, etc.
+            if event_type and event_type != "Undefined":
+                type_lower = event_type.lower()
+                if "convention" in type_lower or "conference" in type_lower or "expo" in type_lower:
+                    categories.append("conventions")
+                if "festival" in type_lower:
+                    categories.append("festival")
+
+        categories = list(dict.fromkeys(categories))  # deduplicate, preserve order
 
         # Extract image
         images = raw.get("images", [])
