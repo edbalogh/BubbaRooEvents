@@ -10,6 +10,8 @@ from app.models.category import Category
 from app.models.interaction import UserEventInteraction, UserSavedEvent
 from app.models.user import User, UserPreference
 from app.schemas.recommendation import InteractionCreate, PreferenceUpdate
+from app.core.cache import invalidate_user_recommendations
+from app.services.preference_learning import get_preference_stats
 from app.services.recommendation_service import update_preference_from_interaction
 
 router = APIRouter(prefix="/me", tags=["preferences"])
@@ -77,7 +79,17 @@ async def update_preferences(
             db.add(UserPreference(user_id=user.id, category_id=cat.id, weight=clamped))
 
     await db.flush()
+    await invalidate_user_recommendations(str(user.id))
     return {"status": "updated"}
+
+
+@router.get("/preferences/stats")
+async def get_learning_stats(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get preference learning statistics (interaction counts, confidence)."""
+    return await get_preference_stats(db, user.id)
 
 
 @router.put("/preferences/distance")

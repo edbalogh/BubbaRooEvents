@@ -1,9 +1,18 @@
+import hashlib
 from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.cache import (
+    CACHE_TTL_EVENT_SEARCH,
+    CACHE_TTL_TONIGHT,
+    cache_get,
+    cache_set,
+    event_search_key,
+    tonight_key,
+)
 from app.core.database import get_db
 from app.schemas.event import EventListResponse, EventResponse
 from app.services.event_service import get_event_by_id, get_tonight_events, search_events
@@ -24,18 +33,29 @@ async def list_events(
     per_page: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
+    # Check cache
+    params_str = f"{q}:{category}:{date_from}:{date_to}:{price_max}:{sort}:{page}:{per_page}"
+    params_hash = hashlib.md5(params_str.encode()).hexdigest()[:12]
+    cache_key = event_search_key(city or "all", params_hash)
+
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
     events, total = await search_events(
         db, q=q, city=city, category=category,
         date_from=date_from, date_to=date_to,
         price_max=price_max, sort=sort,
         page=page, per_page=per_page,
     )
-    return EventListResponse(
+    result = EventListResponse(
         events=[EventResponse.model_validate(e) for e in events],
         total=total,
         page=page,
         per_page=per_page,
     )
+    await cache_set(cache_key, result.model_dump(), CACHE_TTL_EVENT_SEARCH)
+    return result
 
 
 @router.get("/tonight", response_model=list[EventResponse])
@@ -43,8 +63,15 @@ async def tonight_events(
     city: str = Query(..., description="City name"),
     db: AsyncSession = Depends(get_db),
 ):
+    cache_key = tonight_key(city)
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+
     events = await get_tonight_events(db, city)
-    return [EventResponse.model_validate(e) for e in events]
+    result = [EventResponse.model_validate(e).model_dump() for e in events]
+    await cache_set(cache_key, result, CACHE_TTL_TONIGHT)
+    return result
 
 
 @router.get("/{event_id}", response_model=EventResponse)

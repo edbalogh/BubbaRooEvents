@@ -6,7 +6,13 @@ celery_app = Celery(
     "bubbaroo",
     broker=settings.redis_url,
     backend=settings.redis_url,
-    include=["worker.tasks.ingestion", "worker.tasks.embeddings", "worker.tasks.notifications"],
+    include=[
+        "worker.tasks.ingestion",
+        "worker.tasks.embeddings",
+        "worker.tasks.notifications",
+        "worker.tasks.preferences",
+        "worker.tasks.scrapers",
+    ],
 )
 
 celery_app.conf.update(
@@ -63,6 +69,16 @@ celery_app.conf.update(
         "send-weekly-digest": {
             "task": "worker.tasks.notifications.send_weekly_digest",
             "schedule": 604800.0,  # once per week
+        },
+        # --- Preference Learning ---
+        "recompute-preferences": {
+            "task": "worker.tasks.preferences.recompute_preferences",
+            "schedule": 21600.0,  # every 6 hours
+        },
+        # --- Venue Scrapers ---
+        "scrape-venues": {
+            "task": "worker.tasks.scrapers.scrape_venues",
+            "schedule": 21600.0,  # every 6 hours
         },
     },
 )

@@ -38,6 +38,9 @@ class Settings(BaseSettings):
     # Notifications - Push (Firebase)
     firebase_credentials_path: str = ""
 
+    # Monitoring
+    sentry_dsn: str = ""
+
     # App
     app_env: str = "development"
     use_mock_data: bool = True
