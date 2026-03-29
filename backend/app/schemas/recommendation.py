@@ -1,6 +1,13 @@
 from pydantic import BaseModel
 
 
+class ScoreBreakdown(BaseModel):
+    category_affinity: float = 0.0
+    embedding_similarity: float = 0.0
+    popularity: float = 0.0
+    distance_penalty: float = 0.0
+
+
 class RecommendationResponse(BaseModel):
     id: str
     title: str
@@ -21,15 +28,11 @@ class RecommendationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class ScoreBreakdown(BaseModel):
-    category_affinity: float = 0.0
-    embedding_similarity: float = 0.0
-    popularity: float = 0.0
-    distance_penalty: float = 0.0
-
-
-# Fix forward reference
-RecommendationResponse.model_rebuild()
+class CategoryPreference(BaseModel):
+    category_id: int
+    category_name: str
+    category_slug: str
+    weight: float
 
 
 class PreferenceUpdate(BaseModel):
@@ -40,17 +43,6 @@ class PreferenceUpdate(BaseModel):
 class PreferencesResponse(BaseModel):
     categories: list[CategoryPreference]
     max_distance_miles: float = 25.0
-
-
-class CategoryPreference(BaseModel):
-    category_id: int
-    category_name: str
-    category_slug: str
-    weight: float
-
-
-# Fix forward reference
-PreferencesResponse.model_rebuild()
 
 
 class InteractionCreate(BaseModel):
