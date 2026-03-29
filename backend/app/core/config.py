@@ -19,8 +19,10 @@ class Settings(BaseSettings):
     seatgeek_client_id: str = ""
     seatgeek_client_secret: str = ""
 
-    # AI (Claude API)
-    anthropic_api_key: str = ""
+    # AI (Ollama)
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_recommend_model: str = "qwen3.5:9b"
+    ollama_trip_model: str = "gpt-oss:latest"
 
     # Slack bot
     slack_signing_secret: str = ""
