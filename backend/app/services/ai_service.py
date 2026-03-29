@@ -1,53 +1,23 @@
-"""AI-powered services using Claude API.
+"""AI-powered services using local Ollama models.
 
 Provides recommendation explanations and trip planning through
-natural language generation.
+natural language generation. Errors propagate — no silent fallbacks.
 """
 
 from __future__ import annotations
 
-import logging
-from datetime import datetime
-
-import httpx
-
 from app.core.config import settings
+from app.services.llm_provider import OllamaProvider
 
-logger = logging.getLogger(__name__)
+_recommend_provider = OllamaProvider(
+    base_url=settings.ollama_base_url,
+    model=settings.ollama_recommend_model,
+)
 
-CLAUDE_API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = "claude-sonnet-4-20250514"
-
-
-async def _call_claude(system_prompt: str, user_message: str, max_tokens: int = 500) -> str | None:
-    """Make a request to the Claude API."""
-    api_key = getattr(settings, "anthropic_api_key", "")
-    if not api_key:
-        logger.warning("Anthropic API key not configured, skipping AI call")
-        return None
-
-    try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                CLAUDE_API_URL,
-                headers={
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": MODEL,
-                    "max_tokens": max_tokens,
-                    "system": system_prompt,
-                    "messages": [{"role": "user", "content": user_message}],
-                },
-            )
-            response.raise_for_status()
-            data = response.json()
-            return data["content"][0]["text"]
-    except Exception as e:
-        logger.error(f"Claude API call failed: {e}")
-        return None
+_trip_provider = OllamaProvider(
+    base_url=settings.ollama_base_url,
+    model=settings.ollama_trip_model,
+)
 
 
 async def explain_recommendation(
@@ -62,10 +32,7 @@ async def explain_recommendation(
     score_breakdown: dict,
     user_top_categories: list[str],
 ) -> str:
-    """Generate a natural language explanation of why an event was recommended.
-
-    Falls back to a template-based explanation if Claude API is unavailable.
-    """
+    """Generate a natural language explanation of why an event was recommended."""
     system_prompt = (
         "You are a friendly events concierge for BubbaRoo Events. "
         "Explain in 2-3 sentences why this event is a great match for the user. "
@@ -91,50 +58,7 @@ Match signals:
 
 Explain why this event is a great fit for this user."""
 
-    result = await _call_claude(system_prompt, user_message)
-    if result:
-        return result
-
-    # Fallback: template-based explanation
-    return _template_explanation(
-        event_title, event_categories, event_city, score, score_breakdown, user_top_categories,
-    )
-
-
-def _template_explanation(
-    title: str,
-    categories: list[str],
-    city: str | None,
-    score: float,
-    breakdown: dict,
-    user_categories: list[str],
-) -> str:
-    """Generate a simple template explanation when Claude API is unavailable."""
-    parts = []
-
-    cat_score = breakdown.get("category_affinity", 0)
-    if cat_score > 0.5 and categories:
-        matching = [c for c in categories if c.lower() in [uc.lower() for uc in user_categories]]
-        if matching:
-            parts.append(f"This matches your interest in {matching[0].lower()} events.")
-        else:
-            parts.append(f"This {categories[0].lower()} event fits your taste profile.")
-
-    embed_score = breakdown.get("embedding_similarity", 0)
-    if embed_score > 0.4:
-        parts.append("It's similar to events you've liked before.")
-
-    pop_score = breakdown.get("popularity", 0)
-    if pop_score > 0.5:
-        parts.append("It's trending with other users in your area.")
-
-    if not parts:
-        parts.append(f"We think you'll enjoy {title}!")
-
-    if city:
-        parts.append(f"Happening in {city}.")
-
-    return " ".join(parts)
+    return await _recommend_provider.complete(system_prompt, user_message, max_tokens=500)
 
 
 async def plan_trip(
@@ -143,14 +67,7 @@ async def plan_trip(
     interests: list[str],
     events_context: list[dict],
 ) -> str:
-    """Generate an AI-powered trip plan based on available events.
-
-    Args:
-        destination_city: City the user is visiting
-        travel_dates: Date range description (e.g., "March 15-17")
-        interests: User's interest categories
-        events_context: List of event dicts available during the trip
-    """
+    """Generate an AI-powered trip plan based on available events."""
     system_prompt = (
         "You are a friendly trip planning assistant for BubbaRoo Events. "
         "Help users plan an amazing trip by suggesting which events to attend "
@@ -178,23 +95,4 @@ Here are the events happening during my trip:
 
 Please suggest which events I should attend and help me plan my time there."""
 
-    result = await _call_claude(system_prompt, user_message, max_tokens=1000)
-    if result:
-        return result
-
-    # Fallback
-    if not events_context:
-        return (
-            f"We don't have many events listed in {destination_city} for {travel_dates} yet. "
-            "Check back closer to your trip dates as new events are added daily!"
-        )
-
-    lines = [f"Here are the top events in {destination_city} during {travel_dates}:\n"]
-    for i, e in enumerate(events_context[:5], 1):
-        lines.append(f"{i}. **{e['title']}**")
-        if e.get("date"):
-            lines.append(f"   {e['date']} at {e.get('venue', 'TBD')}")
-        lines.append("")
-
-    lines.append("Tip: Save the ones you like and we'll remind you when tickets go on sale!")
-    return "\n".join(lines)
+    return await _trip_provider.complete(system_prompt, user_message, max_tokens=1000)
