@@ -63,10 +63,9 @@ async def handle_slash_command(
     """
     body = await request.body()
 
-    # Verify signature in production
-    if getattr(settings, "app_env", "") != "development":
-        if not _verify_slack_signature(body, x_slack_request_timestamp, x_slack_signature):
-            raise HTTPException(status_code=401, detail="Invalid signature")
+    # Verify Slack signature
+    if not _verify_slack_signature(body, x_slack_request_timestamp, x_slack_signature):
+        raise HTTPException(status_code=401, detail="Invalid signature")
 
     form_data = await request.form()
     text = form_data.get("text", "").strip()

@@ -21,8 +21,8 @@ class Settings(BaseSettings):
 
     # AI (Ollama)
     ollama_base_url: str = "http://localhost:11434"
-    ollama_recommend_model: str = "qwen3.5:9b"
-    ollama_trip_model: str = "gpt-oss:latest"
+    ollama_recommend_model: str = "gemma4:26b"
+    ollama_trip_model: str = "gemma4:26b"
 
     # Slack bot
     slack_signing_secret: str = ""
@@ -42,10 +42,6 @@ class Settings(BaseSettings):
 
     # Monitoring
     sentry_dsn: str = ""
-
-    # App
-    app_env: str = "development"
-    use_mock_data: bool = True
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

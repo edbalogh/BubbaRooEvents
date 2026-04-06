@@ -11,7 +11,6 @@ from app.ingestion.bandsintown import BandsintownAdapter
 from app.ingestion.eventbrite import EventbriteAdapter
 from app.ingestion.ingest_service import upsert_events
 from app.ingestion.meetup import MeetupAdapter
-from app.ingestion.mock_data import generate_mock_events
 from app.ingestion.seatgeek import SeatGeekAdapter
 from app.ingestion.ticketmaster import TicketmasterAdapter
 from worker.celery_app import celery_app
@@ -100,16 +99,6 @@ async def _run_seatgeek_ingestion():
     return total
 
 
-async def _run_mock_ingestion():
-    total = 0
-    async with _session_factory() as db:
-        for city in INGEST_CITIES:
-            events = generate_mock_events(city)
-            count = await upsert_events(db, events)
-            total += count
-    return total
-
-
 # --- Celery Tasks ---
 
 
@@ -151,11 +140,3 @@ def ingest_seatgeek():
     count = asyncio.run(_run_seatgeek_ingestion())
     return f"Ingested {count} events from SeatGeek"
 
-
-@celery_app.task(name="worker.tasks.ingestion.ingest_mock_events")
-def ingest_mock_events():
-    """Ingest mock events for development."""
-    if not settings.use_mock_data:
-        return "Skipped: Mock data disabled"
-    count = asyncio.run(_run_mock_ingestion())
-    return f"Ingested {count} mock events"

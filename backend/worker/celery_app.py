@@ -43,11 +43,6 @@ celery_app.conf.update(
             "task": "worker.tasks.ingestion.ingest_bandsintown",
             "schedule": 3600.0,  # every hour
         },
-        # --- Development ---
-        "ingest-mock-events": {
-            "task": "worker.tasks.ingestion.ingest_mock_events",
-            "schedule": 3600.0,  # every hour (development only)
-        },
         # --- Embeddings ---
         "generate-embeddings": {
             "task": "worker.tasks.embeddings.generate_embeddings",

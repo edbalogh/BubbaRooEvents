@@ -10,7 +10,7 @@ from app.integrations.slack_bot import router as slack_router
 # Initialize Sentry if configured
 init_sentry(
     dsn=getattr(settings, "sentry_dsn", ""),
-    environment=settings.app_env,
+    environment="production",
 )
 
 app = FastAPI(
@@ -34,7 +34,7 @@ app.include_router(slack_router)
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "0.1.0", "env": settings.app_env}
+    return {"status": "ok", "version": "0.1.0"}
 
 
 @app.get("/metrics", response_class=PlainTextResponse)
