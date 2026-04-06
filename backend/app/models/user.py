@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -40,3 +40,20 @@ class UserPreference(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     user: Mapped["User"] = relationship(back_populates="preferences")
+
+
+class UserArtistPreference(Base):
+    __tablename__ = "user_artist_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
+    )
+    artist_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    musicbrainz_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    mb_genres: Mapped[list[str] | None] = mapped_column(ARRAY(String), nullable=True)
+    genre_context: Mapped[str] = mapped_column(String(100), nullable=False)
+    weight: Mapped[float] = mapped_column(Float, default=2.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped["User"] = relationship()
