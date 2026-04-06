@@ -2,6 +2,20 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../api/client'
 
+const SOURCE_LABELS: Record<string, string> = {
+  ticketmaster: 'Ticketmaster',
+  eventbrite: 'Eventbrite',
+  seatgeek: 'SeatGeek',
+  bandsintown: 'Bandsintown',
+  meetup: 'Meetup',
+  do512: 'Do512',
+  'mohawk-austin': 'Mohawk Austin',
+}
+
+function formatSource(slug: string): string {
+  return SOURCE_LABELS[slug] ?? slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 function formatDate(dateStr: string): string {
   const date = new Date(dateStr)
   return date.toLocaleDateString('en-US', {
@@ -45,6 +59,10 @@ export default function EventCard({ event, showActions, onSave, onDismiss }: Eve
     onDismiss?.(event.id)
   }
 
+  const sources = [event.source]
+  const visibleSources = sources.slice(0, 2)
+  const overflow = sources.length - visibleSources.length
+
   return (
     <Link
       to={`/events/${event.id}`}
@@ -70,6 +88,21 @@ export default function EventCard({ event, showActions, onSave, onDismiss }: Eve
             {event.city && ` \u00b7 ${event.city}, ${event.state ?? ''}`}
           </p>
         )}
+        <div className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 flex-shrink-0" />
+          {visibleSources.map((slug, i) => (
+            <span
+              key={slug}
+              className={`text-xs ${i === 0 ? 'text-indigo-300' : 'text-slate-400'}`}
+            >
+              {i > 0 && <span className="text-slate-300 mr-1">·</span>}
+              {formatSource(slug)}
+            </span>
+          ))}
+          {overflow > 0 && (
+            <span className="text-xs text-gray-400">+{overflow}</span>
+          )}
+        </div>
         <div className="flex items-center justify-between pt-1">
           <span className="text-sm font-medium text-gray-700">
             {formatPrice(event.price_min, event.price_max, event.currency)}
