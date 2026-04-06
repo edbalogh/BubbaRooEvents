@@ -2,7 +2,10 @@
 
 import redis as redis_lib
 from fastapi import APIRouter, Depends
+from typing import Annotated
+
 from pydantic import BaseModel
+from pydantic import StringConstraints
 
 from app.core.config import settings
 from app.core.dependencies import get_current_user
@@ -17,10 +20,15 @@ RATE_LIMIT_TTL = 600  # 10 minutes
 
 
 class IngestCityRequest(BaseModel):
+    city: Annotated[str, StringConstraints(min_length=1, max_length=100, strip_whitespace=True)]
+
+
+class IngestCityResponse(BaseModel):
+    status: str
     city: str
 
 
-@router.post("/city")
+@router.post("/city", response_model=IngestCityResponse)
 async def trigger_city_ingest(
     body: IngestCityRequest,
     user: User = Depends(get_current_user),
@@ -28,10 +36,10 @@ async def trigger_city_ingest(
     """Queue on-demand ingestion for a city. Rate-limited to once per 10 minutes per city."""
     redis_key = f"ingest:city:{body.city.lower()}:last_queued"
 
-    if _redis.get(redis_key):
+    acquired = _redis.set(redis_key, "1", ex=RATE_LIMIT_TTL, nx=True)
+    if not acquired:
         return {"status": "already_queued", "city": body.city}
 
     ingest_city_now.delay(body.city)
-    _redis.setex(redis_key, RATE_LIMIT_TTL, "1")
 
     return {"status": "queued", "city": body.city}

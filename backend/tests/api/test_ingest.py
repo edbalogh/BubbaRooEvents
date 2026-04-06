@@ -34,7 +34,7 @@ def auth_override():
 async def test_ingest_city_queues_task(auth_override):
     with patch("app.api.v1.ingest.ingest_city_now") as mock_task, \
          patch("app.api.v1.ingest._redis") as mock_redis:
-        mock_redis.get.return_value = None  # not rate-limited
+        mock_redis.set.return_value = True  # acquired NX lock
         mock_task.delay = MagicMock()
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -50,12 +50,15 @@ async def test_ingest_city_queues_task(auth_override):
     assert data["city"] == "Nashville"
     mock_task.delay.assert_called_once_with("Nashville")
 
+    redis_key = "ingest:city:nashville:last_queued"
+    mock_redis.set.assert_called_once_with(redis_key, "1", ex=600, nx=True)
+
 
 @pytest.mark.asyncio
 async def test_ingest_city_rate_limited(auth_override):
     with patch("app.api.v1.ingest.ingest_city_now") as mock_task, \
          patch("app.api.v1.ingest._redis") as mock_redis:
-        mock_redis.get.return_value = "1"  # already queued recently
+        mock_redis.set.return_value = None  # NX failed → already rate-limited
 
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
             resp = await client.post(

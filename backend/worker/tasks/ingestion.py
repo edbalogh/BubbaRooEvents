@@ -169,12 +169,6 @@ def ingest_seatgeek():
 
 async def _run_ingest_city_now(city: str) -> int:
     """Async implementation of on-demand city ingestion (extracted for testability)."""
-    rate_key = f"ingest:city:{city}:last_queued"
-    acquired = await _redis.set(rate_key, "1", ex=600, nx=True)
-    if not acquired:
-        logger.info(f"[ingest_city_now] {city}: skipped (rate-limited)")
-        return 0
-
     lat, lon = _DEFAULT_CITIES.get(city, (0.0, 0.0))
 
     today = datetime.now(UTC).date()
