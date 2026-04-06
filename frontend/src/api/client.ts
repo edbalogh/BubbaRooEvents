@@ -140,6 +140,29 @@ export interface NotificationHistoryItem {
   }
 }
 
+export interface ArtistPreference {
+  id: number
+  artist_name: string
+  musicbrainz_id: string | null
+  mb_genres: string[] | null
+  genre_context: string
+  weight: number
+}
+
+export interface AddArtistRequest {
+  artist_name: string
+  musicbrainz_id?: string
+  mb_genres?: string[]
+  genre_context: string
+}
+
+export interface MusicBrainzArtist {
+  id: string
+  name: string
+  tags?: { name: string; count: number }[]
+  country?: string
+}
+
 export interface DiscoveredSource {
   name: string
   url: string
@@ -334,8 +357,45 @@ export const api = {
     })
   },
 
-  // Seed (dev only)
-  seedData(city: string = 'Austin'): Promise<{ events_seeded: number }> {
-    return request(`/seed?city=${encodeURIComponent(city)}`, { method: 'POST' })
+  // City ingestion
+  ingestCity(city: string): Promise<{ status: string; city: string }> {
+    return request('/ingest/city', {
+      method: 'POST',
+      body: JSON.stringify({ city }),
+    })
+  },
+
+  // Artist preferences
+  getArtists(): Promise<ArtistPreference[]> {
+    return request('/me/artists')
+  },
+
+  addArtist(data: AddArtistRequest): Promise<ArtistPreference> {
+    return request('/me/artists', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  removeArtist(artistName: string): Promise<void> {
+    return request(`/me/artists/${encodeURIComponent(artistName)}`, { method: 'DELETE' })
+  },
+
+  updateHomeCity(city: string): Promise<{ home_city: string }> {
+    return request('/me/city', {
+      method: 'PUT',
+      body: JSON.stringify({ city }),
+    })
+  },
+
+  // MusicBrainz artist search (public API, called directly from frontend)
+  async searchMusicBrainzArtists(query: string): Promise<MusicBrainzArtist[]> {
+    const resp = await fetch(
+      `https://musicbrainz.org/ws/2/artist?query=${encodeURIComponent(query)}&fmt=json&limit=5`,
+      { headers: { 'User-Agent': 'BubbaRooEvents/0.1 (dev)' } }
+    )
+    if (!resp.ok) return []
+    const data = await resp.json()
+    return data.artists ?? []
   },
 }
