@@ -24,7 +24,6 @@ _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_co
 
 # Default always-on cities (used even if no users registered)
 _DEFAULT_CITIES = {
-    "Austin": (30.2672, -97.7431),
     "Nashville": (36.1627, -86.7816),
 }
 
