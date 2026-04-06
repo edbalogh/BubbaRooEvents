@@ -7,8 +7,6 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-import redis.asyncio as redis_lib
-
 from app.core.config import settings
 from app.ingestion.bandsintown import BandsintownAdapter
 from app.ingestion.eventbrite import EventbriteAdapter
@@ -29,9 +27,6 @@ _DEFAULT_CITIES = {
     "Austin": (30.2672, -97.7431),
     "Nashville": (36.1627, -86.7816),
 }
-
-# Redis client for rate-limiting on-demand ingestion
-_redis = redis_lib.Redis.from_url(settings.redis_url, decode_responses=True)
 
 
 async def _get_active_cities() -> dict[str, tuple[float, float]]:
