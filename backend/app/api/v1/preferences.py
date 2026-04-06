@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,6 +14,7 @@ from app.schemas.recommendation import InteractionCreate, PreferenceUpdate
 from app.core.cache import invalidate_user_recommendations
 from app.services.preference_learning import get_preference_stats
 from app.services.recommendation_service import update_preference_from_interaction
+from app.services.user_service import update_user_city
 
 router = APIRouter(prefix="/me", tags=["preferences"])
 
@@ -183,3 +185,21 @@ async def list_saved_events(
         {"event_id": str(s.event_id), "notes": s.notes, "created_at": s.created_at}
         for s in saved
     ]
+
+
+class UpdateCityRequest(BaseModel):
+    city: str = Field(min_length=1, max_length=100)
+
+    model_config = {"str_strip_whitespace": True}
+
+
+@router.put("/city")
+async def update_home_city(
+    body: UpdateCityRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update the user's home city and queue ingestion for it."""
+    await update_user_city(db, user, body.city)
+    await db.commit()
+    return {"home_city": body.city}
