@@ -21,7 +21,7 @@ const CATEGORIES = [
   { label: 'Nightlife', value: 'nightlife' },
 ]
 
-export default function SearchBar({ onSearch, initialCity = 'Austin' }: SearchBarProps) {
+export default function SearchBar({ onSearch, initialCity = '' }: SearchBarProps) {
   const [query, setQuery] = useState('')
   const [city, setCity] = useState(initialCity)
   const [activeCategory, setActiveCategory] = useState('')

@@ -79,7 +79,7 @@ export default function Home() {
           {defaultCity ? ` in ${defaultCity}` : ' near you'}
         </p>
       </div>
-      <SearchBar onSearch={handleSearch} />
+      <SearchBar onSearch={handleSearch} initialCity={defaultCity} />
       <EventList events={events} loading={loading} total={total} />
     </div>
   )
