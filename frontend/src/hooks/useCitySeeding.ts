@@ -19,11 +19,14 @@ export function useCitySeeding(city: string): UseCitySeedingResult {
   const [eventCount, setEventCount] = useState(0)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const startedRef = useRef(false)
+  const checkedCityRef = useRef<string | null>(null)
 
   useEffect(() => {
-    if (!city || startedRef.current) return
-    startedRef.current = true
+    if (!city || checkedCityRef.current === city) return
+    checkedCityRef.current = city
+    setState('checking')
+    setEvents([])
+    setEventCount(0)
 
     const cleanup = () => {
       if (timerRef.current) clearInterval(timerRef.current)

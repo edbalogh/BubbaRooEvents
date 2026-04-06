@@ -11,7 +11,7 @@ interface GeneralTabProps {
 }
 
 export default function GeneralTab({ maxDistance, onMaxDistanceChange, onSave, saving, message }: GeneralTabProps) {
-  const { user } = useAuth()
+  const { user, updateUser } = useAuth()
   const [cityInput, setCityInput] = useState(user?.home_city ?? '')
   const [cityMsg, setCityMsg] = useState('')
 
@@ -19,6 +19,7 @@ export default function GeneralTab({ maxDistance, onMaxDistanceChange, onSave, s
     if (!cityInput.trim()) return
     try {
       await api.updateHomeCity(cityInput.trim())
+      updateUser({ home_city: cityInput.trim() })
       setCityMsg('City updated!')
       setTimeout(() => setCityMsg(''), 3000)
     } catch {
