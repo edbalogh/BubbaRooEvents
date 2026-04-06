@@ -59,6 +59,7 @@ export default function EventCard({ event, showActions, onSave, onDismiss }: Eve
     onDismiss?.(event.id)
   }
 
+  // wraps single source; slice/overflow ready for future multi-source support
   const sources = [event.source]
   const visibleSources = sources.slice(0, 2)
   const overflow = sources.length - visibleSources.length
@@ -92,7 +93,7 @@ export default function EventCard({ event, showActions, onSave, onDismiss }: Eve
           <span className="w-1.5 h-1.5 rounded-full bg-indigo-300 flex-shrink-0" />
           {visibleSources.map((slug, i) => (
             <span
-              key={slug}
+              key={i}
               className={`text-xs ${i === 0 ? 'text-indigo-300' : 'text-slate-400'}`}
             >
               {i > 0 && <span className="text-slate-300 mr-1">·</span>}
