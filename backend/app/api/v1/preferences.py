@@ -201,5 +201,4 @@ async def update_home_city(
 ):
     """Update the user's home city and queue ingestion for it."""
     await update_user_city(db, user, body.city)
-    await db.commit()
     return {"home_city": body.city}

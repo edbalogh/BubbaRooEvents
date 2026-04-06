@@ -1,6 +1,10 @@
+import logging
+
 import redis as redis_lib
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.core.config import settings
 from app.core.security import create_access_token, hash_password, verify_password
@@ -14,10 +18,13 @@ _INGEST_TTL = 600  # 10 minutes
 
 def _queue_city_ingest_if_needed(city: str) -> None:
     """Fire-and-forget city ingestion, rate-limited by Redis (atomic NX)."""
-    redis_key = f"ingest:city:{city.lower()}:last_queued"
-    acquired = _redis.set(redis_key, "1", ex=_INGEST_TTL, nx=True)
-    if acquired:
-        ingest_city_now.delay(city)
+    try:
+        redis_key = f"ingest:city:{city.lower()}:last_queued"
+        acquired = _redis.set(redis_key, "1", ex=_INGEST_TTL, nx=True)
+        if acquired:
+            ingest_city_now.delay(city)
+    except Exception as e:
+        logger.warning(f"[city_ingest] Could not queue ingestion for {city!r}: {e}")
 
 
 async def create_user(db: AsyncSession, data: UserRegister) -> User:
