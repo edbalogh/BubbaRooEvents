@@ -13,6 +13,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
+    if (response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
     const error = await response.json().catch(() => ({ detail: 'Request failed' }))
     throw new Error(error.detail || `HTTP ${response.status}`)
   }

@@ -71,6 +71,10 @@ export default function PreferencesTab({ initialPreferences, onSaved }: Preferen
       try {
         const updates = Object.entries(weights).map(([category_slug, weight]) => ({ category_slug, weight }))
         await api.updatePreferences(updates)
+      } catch (err) {
+        setMessage(err instanceof Error ? err.message : 'Failed to save preferences')
+        setSaving(false)
+        return
       } finally {
         setSaving(false)
       }
