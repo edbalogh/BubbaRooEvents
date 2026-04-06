@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+import redis.asyncio as redis_lib
+
 from app.core.config import settings
 from app.ingestion.bandsintown import BandsintownAdapter
 from app.ingestion.eventbrite import EventbriteAdapter
@@ -16,7 +18,6 @@ from app.ingestion.seatgeek import SeatGeekAdapter
 from app.ingestion.ticketmaster import TicketmasterAdapter
 from app.models.user import User
 from worker.celery_app import celery_app
-import redis as redis_lib
 
 logger = logging.getLogger(__name__)
 
@@ -169,10 +170,12 @@ def ingest_seatgeek():
 async def _run_ingest_city_now(city: str) -> int:
     """Async implementation of on-demand city ingestion (extracted for testability)."""
     rate_key = f"ingest:city:{city}:last_queued"
-    if _redis.get(rate_key):
+    acquired = await _redis.set(rate_key, "1", ex=600, nx=True)
+    if not acquired:
         logger.info(f"[ingest_city_now] {city}: skipped (rate-limited)")
         return 0
-    _redis.setex(rate_key, 600, "1")
+
+    lat, lon = _DEFAULT_CITIES.get(city, (0.0, 0.0))
 
     today = datetime.now(UTC).date()
     date_to = today + timedelta(days=30)
@@ -204,7 +207,7 @@ async def _run_ingest_city_now(city: str) -> int:
     try:
         async with _session_factory() as db:
             adapter = BandsintownAdapter()
-            events = await adapter.fetch_events(city, today, date_to, lat=0, lon=0)
+            events = await adapter.fetch_events(city, today, date_to, lat=lat, lon=lon)
             total += await upsert_events(db, events)
             logger.info(f"[ingest_city_now][bandsintown] {city}: {len(events)} events")
     except Exception as e:
@@ -214,7 +217,7 @@ async def _run_ingest_city_now(city: str) -> int:
     try:
         async with _session_factory() as db:
             adapter = EventbriteAdapter()
-            events = await adapter.fetch_events(city, today, date_to, lat=0, lon=0)
+            events = await adapter.fetch_events(city, today, date_to, lat=lat, lon=lon)
             total += await upsert_events(db, events)
             logger.info(f"[ingest_city_now][eventbrite] {city}: {len(events)} events")
     except Exception as e:
@@ -224,7 +227,7 @@ async def _run_ingest_city_now(city: str) -> int:
     try:
         async with _session_factory() as db:
             adapter = MeetupAdapter()
-            events = await adapter.fetch_events(city, today, date_to, lat=0, lon=0)
+            events = await adapter.fetch_events(city, today, date_to, lat=lat, lon=lon)
             total += await upsert_events(db, events)
             logger.info(f"[ingest_city_now][meetup] {city}: {len(events)} events")
     except Exception as e:

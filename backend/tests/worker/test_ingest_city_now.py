@@ -59,25 +59,25 @@ def _make_session_mock():
 @pytest.mark.asyncio
 async def test_ingest_city_now_rate_limited():
     """_run_ingest_city_now returns 0 immediately when rate key exists in Redis."""
-    mock_redis = MagicMock()
-    mock_redis.get.return_value = "1"  # key exists → rate-limited
+    mock_redis = AsyncMock()
+    mock_redis.set = AsyncMock(return_value=None)  # NX failed → already exists → rate-limited
 
     with patch("worker.tasks.ingestion._redis", mock_redis), \
          patch("worker.tasks.ingestion._session_factory") as mock_factory:
         from worker.tasks.ingestion import _run_ingest_city_now
         result = await _run_ingest_city_now("Austin")
 
-    mock_redis.get.assert_called_once_with("ingest:city:Austin:last_queued")
-    mock_redis.setex.assert_not_called()
+    rate_key = "ingest:city:Austin:last_queued"
+    mock_redis.set.assert_called_once_with(rate_key, "1", ex=600, nx=True)
     mock_factory.assert_not_called()
     assert result == 0
 
 
 @pytest.mark.asyncio
 async def test_ingest_city_now_sets_rate_key_and_calls_adapters():
-    """_run_ingest_city_now sets the rate key and opens a separate session per adapter."""
-    mock_redis = MagicMock()
-    mock_redis.get.return_value = None  # key absent → not rate-limited
+    """_run_ingest_city_now sets the rate key atomically and opens a separate session per adapter."""
+    mock_redis = AsyncMock()
+    mock_redis.set = AsyncMock(return_value=True)  # NX succeeded → not rate-limited
 
     # Each call to _session_factory() should return a fresh async context manager.
     mock_db = AsyncMock()
@@ -105,10 +105,10 @@ async def test_ingest_city_now_sets_rate_key_and_calls_adapters():
         result = await _run_ingest_city_now("Denver")
 
     rate_key = "ingest:city:Denver:last_queued"
-    mock_redis.get.assert_called_once_with(rate_key)
-    mock_redis.setex.assert_called_once_with(rate_key, 600, "1")
+    mock_redis.set.assert_called_once_with(rate_key, "1", ex=600, nx=True)
 
     # _session_factory should have been called once per always-on adapter (3 times).
     assert mock_factory.call_count == 3, (
         f"Expected 3 session factory calls (one per adapter), got {mock_factory.call_count}"
     )
+    assert result == 9

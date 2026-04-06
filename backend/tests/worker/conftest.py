@@ -17,6 +17,8 @@ def pytest_configure(config):
     # Stub redis so redis_lib.Redis.from_url doesn't blow up
     redis_stub = MagicMock()
     sys.modules.setdefault("redis", redis_stub)
+    # Also stub redis.asyncio for `import redis.asyncio as redis_lib`
+    sys.modules.setdefault("redis.asyncio", MagicMock())
 
     # Stub celery so worker.celery_app can be imported without a broker
     sys.modules.setdefault("celery", MagicMock())
