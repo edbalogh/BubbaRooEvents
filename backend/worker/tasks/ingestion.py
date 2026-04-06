@@ -23,15 +23,6 @@ logger = logging.getLogger(__name__)
 _engine = create_async_engine(settings.database_url)
 _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
-# Cities and their approximate coordinates for geo-based APIs
-INGEST_CITIES = {
-    "Austin": (30.2672, -97.7431),
-    "Nashville": (36.1627, -86.7816),
-    "Denver": (39.7392, -104.9903),
-    "Portland": (45.5152, -122.6784),
-    "Seattle": (47.6062, -122.3321),
-}
-
 # Default always-on cities (used even if no users registered)
 _DEFAULT_CITIES = {
     "Austin": (30.2672, -97.7431),
@@ -175,56 +166,77 @@ def ingest_seatgeek():
     return f"Ingested {count} events from SeatGeek"
 
 
+async def _run_ingest_city_now(city: str) -> int:
+    """Async implementation of on-demand city ingestion (extracted for testability)."""
+    rate_key = f"ingest:city:{city}:last_queued"
+    if _redis.get(rate_key):
+        logger.info(f"[ingest_city_now] {city}: skipped (rate-limited)")
+        return 0
+    _redis.setex(rate_key, 600, "1")
+
+    today = datetime.now(UTC).date()
+    date_to = today + timedelta(days=30)
+    total = 0
+
+    # Ticketmaster
+    if settings.ticketmaster_api_key:
+        try:
+            async with _session_factory() as db:
+                adapter = TicketmasterAdapter()
+                events = await adapter.fetch_events(city, today, date_to)
+                total += await upsert_events(db, events)
+                logger.info(f"[ingest_city_now][ticketmaster] {city}: {len(events)} events")
+        except Exception as e:
+            logger.error(f"[ingest_city_now][ticketmaster] {city} failed: {e}")
+
+    # SeatGeek
+    if settings.seatgeek_client_id:
+        try:
+            async with _session_factory() as db:
+                adapter = SeatGeekAdapter()
+                events = await adapter.fetch_events(city, today, date_to)
+                total += await upsert_events(db, events)
+                logger.info(f"[ingest_city_now][seatgeek] {city}: {len(events)} events")
+        except Exception as e:
+            logger.error(f"[ingest_city_now][seatgeek] {city} failed: {e}")
+
+    # Bandsintown
+    try:
+        async with _session_factory() as db:
+            adapter = BandsintownAdapter()
+            events = await adapter.fetch_events(city, today, date_to, lat=0, lon=0)
+            total += await upsert_events(db, events)
+            logger.info(f"[ingest_city_now][bandsintown] {city}: {len(events)} events")
+    except Exception as e:
+        logger.error(f"[ingest_city_now][bandsintown] {city} failed: {e}")
+
+    # Eventbrite
+    try:
+        async with _session_factory() as db:
+            adapter = EventbriteAdapter()
+            events = await adapter.fetch_events(city, today, date_to, lat=0, lon=0)
+            total += await upsert_events(db, events)
+            logger.info(f"[ingest_city_now][eventbrite] {city}: {len(events)} events")
+    except Exception as e:
+        logger.error(f"[ingest_city_now][eventbrite] {city} failed: {e}")
+
+    # Meetup
+    try:
+        async with _session_factory() as db:
+            adapter = MeetupAdapter()
+            events = await adapter.fetch_events(city, today, date_to, lat=0, lon=0)
+            total += await upsert_events(db, events)
+            logger.info(f"[ingest_city_now][meetup] {city}: {len(events)} events")
+    except Exception as e:
+        logger.error(f"[ingest_city_now][meetup] {city} failed: {e}")
+
+    return total
+
+
 @celery_app.task(name="worker.tasks.ingestion.ingest_city_now")
 def ingest_city_now(city: str):
     """On-demand ingestion for a single city across all adapters."""
-    async def _run():
-        today = datetime.now(UTC).date()
-        date_to = today + timedelta(days=30)
-        total = 0
-
-        async with _session_factory() as db:
-            # Ticketmaster
-            if settings.ticketmaster_api_key:
-                try:
-                    adapter = TicketmasterAdapter()
-                    events = await adapter.fetch_events(city, today, date_to)
-                    total += await upsert_events(db, events)
-                    logger.info(f"[ingest_city_now][ticketmaster] {city}: {len(events)} events")
-                except Exception as e:
-                    logger.error(f"[ingest_city_now][ticketmaster] {city} failed: {e}")
-
-            # SeatGeek
-            if settings.seatgeek_client_id:
-                try:
-                    adapter = SeatGeekAdapter()
-                    events = await adapter.fetch_events(city, today, date_to)
-                    total += await upsert_events(db, events)
-                    logger.info(f"[ingest_city_now][seatgeek] {city}: {len(events)} events")
-                except Exception as e:
-                    logger.error(f"[ingest_city_now][seatgeek] {city} failed: {e}")
-
-            # Bandsintown
-            try:
-                adapter = BandsintownAdapter()
-                events = await adapter.fetch_events(city, today, date_to, lat=0, lon=0)
-                total += await upsert_events(db, events)
-                logger.info(f"[ingest_city_now][bandsintown] {city}: {len(events)} events")
-            except Exception as e:
-                logger.error(f"[ingest_city_now][bandsintown] {city} failed: {e}")
-
-            # Eventbrite
-            try:
-                adapter = EventbriteAdapter()
-                events = await adapter.fetch_events(city, today, date_to, lat=0, lon=0)
-                total += await upsert_events(db, events)
-                logger.info(f"[ingest_city_now][eventbrite] {city}: {len(events)} events")
-            except Exception as e:
-                logger.error(f"[ingest_city_now][eventbrite] {city} failed: {e}")
-
-        return total
-
-    count = asyncio.run(_run())
+    count = asyncio.run(_run_ingest_city_now(city))
     logger.info(f"[ingest_city_now] {city}: {count} total events ingested")
     return f"Ingested {count} events for {city}"
 
