@@ -19,9 +19,7 @@ _engine = create_async_engine(settings.database_url)
 _session_factory = async_sessionmaker(_engine, class_=AsyncSession, expire_on_commit=False)
 
 # Default always-on cities (used even if no users registered)
-_DEFAULT_CITIES = {
-    "Nashville": (36.1627, -86.7816),
-}
+_DEFAULT_CITIES: dict[str, tuple[float, float]] = {}
 
 
 async def _get_active_cities() -> dict[str, tuple[float, float]]:
