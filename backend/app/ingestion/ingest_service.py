@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ingestion.base import NormalizedEvent
 from app.models.category import Category
-from app.models.event import Event, EventCategory
+from app.models.event import EventCategory, RawEvent
 
 
 async def upsert_events(db: AsyncSession, events: list[NormalizedEvent]) -> int:
@@ -21,7 +21,7 @@ async def upsert_events(db: AsyncSession, events: list[NormalizedEvent]) -> int:
         if event.starts_at is None:
             continue
 
-        stmt = insert(Event).values(
+        stmt = insert(RawEvent).values(
             external_id=event.external_id,
             source=event.source,
             title=event.title,
@@ -53,7 +53,7 @@ async def upsert_events(db: AsyncSession, events: list[NormalizedEvent]) -> int:
                 "status": "active",
                 "image_url": event.image_url,
             },
-        ).returning(Event.id)
+        ).returning(RawEvent.id)
 
         result = await db.execute(stmt)
         event_id = result.scalar_one()

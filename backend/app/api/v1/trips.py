@@ -1,6 +1,6 @@
 """Trip planning and AI recommendation explanation endpoints."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user
-from app.models.event import Event
+from app.models.event import RawEvent
 from app.models.user import User, UserPreference
 from app.models.category import Category
 from app.services.ai_service import explain_recommendation, plan_trip
@@ -30,7 +30,7 @@ async def explain_event_recommendation(
 ):
     """Get a Claude-powered explanation of why an event was recommended."""
     # Fetch the event
-    result = await db.execute(select(Event).where(Event.id == event_id))
+    result = await db.execute(select(RawEvent).where(RawEvent.id == event_id))
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -104,8 +104,8 @@ async def explore_trip(
     Returns AI-curated trip plan plus raw event list.
     """
     try:
-        date_from = datetime.fromisoformat(body.date_from)
-        date_to = datetime.fromisoformat(body.date_to)
+        date_from = datetime.fromisoformat(body.date_from).replace(tzinfo=timezone.utc)
+        date_to = datetime.fromisoformat(body.date_to).replace(tzinfo=timezone.utc)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format (YYYY-MM-DD).")
 

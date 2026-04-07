@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.event import Event
+from app.models.event import RawEvent
 from app.models.user import User
 from app.notifications.base import NotificationPayload
 from app.notifications.dispatcher import dispatch_notification
@@ -27,7 +27,7 @@ def _format_event_date(dt: datetime) -> str:
 
 
 def _build_event_payload(
-    event: Event, notification_type: str, extra_body: str = "",
+    event: RawEvent, notification_type: str, extra_body: str = "",
 ) -> NotificationPayload:
     """Build a notification payload from an event."""
     price_str = ""
@@ -130,12 +130,12 @@ async def notify_ticket_alerts(db: AsyncSession) -> int:
 
     # Find events that recently went on sale
     result = await db.execute(
-        select(Event)
+        select(RawEvent)
         .where(
-            Event.status == "active",
-            Event.on_sale_at.is_not(None),
-            Event.on_sale_at >= cutoff,
-            Event.starts_at > datetime.now(UTC),
+            RawEvent.status == "active",
+            RawEvent.on_sale_at.is_not(None),
+            RawEvent.on_sale_at >= cutoff,
+            RawEvent.starts_at > datetime.now(UTC),
         )
     )
     new_on_sale = result.scalars().all()

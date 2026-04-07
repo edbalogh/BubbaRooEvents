@@ -18,7 +18,7 @@ import logging
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.event import Event
+from app.models.event import RawEvent
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ def _get_model():
     return _model
 
 
-def build_embedding_text(event: Event) -> str:
+def build_embedding_text(event: RawEvent) -> str:
     """Build the text string to embed for an event."""
     parts = [event.title]
     if event.description:
@@ -71,9 +71,9 @@ async def generate_embeddings_batch(db: AsyncSession, batch_size: int = 100) -> 
     # Find events without embeddings
     # We use raw SQL to check for NULL on the vector column
     result = await db.execute(
-        select(Event)
+        select(RawEvent)
         .where(text("embedding IS NULL"))
-        .where(Event.status == "active")
+        .where(RawEvent.status == "active")
         .limit(batch_size)
     )
     events = list(result.scalars().all())

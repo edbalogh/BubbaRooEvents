@@ -11,7 +11,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.category import Category
-from app.models.event import Event, EventCategory
+from app.models.event import EventCategory, RawEvent
 from app.models.interaction import UserEventInteraction, UserSavedEvent
 from app.models.user import User, UserPreference
 
@@ -24,7 +24,7 @@ DISTANCE_DECAY_FACTOR = 0.1  # penalty per mile beyond preferred radius
 
 @dataclass
 class ScoredEvent:
-    event: Event
+    event: RawEvent
     score: float
     category_affinity: float = 0.0
     embedding_similarity: float = 0.0
@@ -119,7 +119,7 @@ def calculate_distance_miles(lat1: float, lon1: float, lat2: float, lon2: float)
 
 
 def compute_distance_penalty(
-    event: Event, user: User, max_distance: float = 25.0
+    event: RawEvent, user: User, max_distance: float = 25.0
 ) -> float:
     """Returns a penalty (negative value) for events beyond the user's preferred radius."""
     if not (user.home_latitude and user.home_longitude and event.latitude and event.longitude):
@@ -191,14 +191,14 @@ async def recommend_events(
     """
     # Fetch candidate events (active, upcoming)
     query = (
-        select(Event)
-        .where(Event.status == "active", Event.starts_at > datetime.now(UTC))
-        .order_by(Event.starts_at.asc())
+        select(RawEvent)
+        .where(RawEvent.status == "active", RawEvent.starts_at > datetime.now(UTC))
+        .order_by(RawEvent.starts_at.asc())
         .limit(200)  # candidate pool
     )
 
     if city:
-        query = query.where(func.lower(Event.city) == city.lower())
+        query = query.where(func.lower(RawEvent.city) == city.lower())
 
     result = await db.execute(query)
     candidates = list(result.scalars().all())
