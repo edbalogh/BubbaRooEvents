@@ -148,15 +148,15 @@ async def update_source_preference(
 
 
 @router.post("/discovery/run")
-async def run_discovery():
-    """Trigger source discovery now (admin use)."""
+async def run_discovery(user: User = Depends(get_current_user)):
+    """Trigger source discovery now (requires authentication)."""
     task = discover_sources.delay()
     return {"job_id": task.id, "status": "queued"}
 
 
 @router.get("/discovery/status")
 async def discovery_status(db: AsyncSession = Depends(get_db)):
-    """Last discovery run info."""
+    """Last discovery run info. last_new_source_discovered_at reflects the most recent source insertion."""
     result = await db.execute(
         select(func.max(EventSource.last_discovery_at)).where(
             EventSource.discovered_by == "llm_discovery"
@@ -169,12 +169,19 @@ async def discovery_status(db: AsyncSession = Depends(get_db)):
         )
     )
     total_discovered = count_result.scalar_one()
-    return {"last_discovery_at": last_run, "total_discovered_sources": total_discovered}
+    return {
+        "last_new_source_discovered_at": last_run,
+        "total_discovered_sources": total_discovered,
+    }
 
 
 @router.post("/{slug}/refresh")
-async def refresh_source(slug: str, db: AsyncSession = Depends(get_db)):
-    """Trigger immediate scrape of a specific source. Returns task ID for polling."""
+async def refresh_source(
+    slug: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Trigger immediate scrape of a specific source (requires authentication)."""
     result = await db.execute(select(EventSource).where(EventSource.slug == slug))
     source = result.scalar_one_or_none()
     if not source:
@@ -192,7 +199,8 @@ async def get_refresh_status(slug: str, job_id: str):
     return {
         "job_id": job_id,
         "status": result.status,
-        "result": str(result.result) if result.ready() else None,
+        "result": result.result if result.status == "SUCCESS" else None,
+        "error": str(result.result) if result.status == "FAILURE" else None,
     }
 
 

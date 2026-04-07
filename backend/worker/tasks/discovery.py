@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import re
 from datetime import UTC, datetime
 
 from duckduckgo_search import DDGS
@@ -116,9 +117,9 @@ async def _run_discover_sources() -> int:
                     continue
 
                 site_name = confirmation.get("site_name") or url
-                # Derive slug from URL domain + hash suffix to avoid collisions on similar site names
-                url_hash = hashlib.md5(url.encode()).hexdigest()[:6]
-                slug_base = site_name.lower().replace(" ", "-").replace("/", "-")[:43]
+                # Sanitize to [a-z0-9-] and append URL hash to prevent slug collisions
+                url_hash = hashlib.md5(url.encode(), usedforsecurity=False).hexdigest()[:6]
+                slug_base = re.sub(r"[^a-z0-9-]", "-", site_name.lower())[:43].strip("-")
                 slug = f"{slug_base}-{url_hash}"
 
                 async with _session_factory() as db:
@@ -191,9 +192,13 @@ async def _run_scrape_source(source_slug: str) -> int:
         events = [e for e in events if e is not None]
         logger.info(f"[scraper] {source_slug}: {len(events)} events via LLM extraction")
 
-    if events:
-        async with _session_factory() as db:
-            await upsert_events(db, events)
+    try:
+        if events:
+            async with _session_factory() as db:
+                await upsert_events(db, events)
+    except Exception as e:
+        await _mark_source_error(source_slug, f"upsert failed: {e}")
+        return 0
 
     await _update_source_scraped_at(source_slug)
     return len(events)
@@ -285,6 +290,7 @@ def scrape_all_sources():
             result = await db.execute(
                 select(EventSource.slug).where(
                     EventSource.scrape_status == "active",
+                    EventSource.is_active == True,
                     EventSource.source_type.in_(["discovered", "scraper"]),
                 )
             )
