@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
-import uuid
 from datetime import UTC, datetime
 
 from duckduckgo_search import DDGS
@@ -116,7 +116,10 @@ async def _run_discover_sources() -> int:
                     continue
 
                 site_name = confirmation.get("site_name") or url
-                slug = site_name.lower().replace(" ", "-").replace("/", "-")[:50]
+                # Derive slug from URL domain + hash suffix to avoid collisions on similar site names
+                url_hash = hashlib.md5(url.encode()).hexdigest()[:6]
+                slug_base = site_name.lower().replace(" ", "-").replace("/", "-")[:43]
+                slug = f"{slug_base}-{url_hash}"
 
                 async with _session_factory() as db:
                     stmt = insert(EventSource).values(
@@ -162,12 +165,8 @@ async def _run_scrape_source(source_slug: str) -> int:
         return 0
 
     logger.info(f"[scraper] Scraping {source_slug} ({source.url})")
-    markdown = await fetch_page_markdown(source.url)
-    if not markdown:
-        await _mark_source_error(source_slug, "Empty page returned")
-        return 0
 
-    # Fast path: try JSON-LD structured data first
+    # Fast path: try JSON-LD structured data via HTML fetch (independent of Crawl4AI)
     events: list[NormalizedEvent] = []
     try:
         from app.ingestion.scrapers.generic_jsonld import GenericJsonLdScraper
@@ -181,8 +180,12 @@ async def _run_scrape_source(source_slug: str) -> int:
     except Exception as e:
         logger.debug(f"[scraper] JSON-LD fast path failed for {source_slug}: {e}")
 
-    # Slow path: LLM extraction from markdown
+    # Slow path: Crawl4AI markdown fetch + LLM extraction
     if not events:
+        markdown = await fetch_page_markdown(source.url)
+        if not markdown:
+            await _mark_source_error(source_slug, "Empty page returned by Crawl4AI")
+            return 0
         raw_events = await extract_events_from_markdown(llm, markdown, source.url)
         events = [_normalize_extracted_event(e, source_slug) for e in raw_events]
         events = [e for e in events if e is not None]
@@ -198,11 +201,10 @@ async def _run_scrape_source(source_slug: str) -> int:
 
 def _normalize_extracted_event(raw: dict, source_slug: str) -> NormalizedEvent | None:
     """Convert LLM-extracted event dict to NormalizedEvent."""
-    from datetime import datetime as dt
     try:
         date_str = raw.get("date", "")
         time_str = raw.get("time") or "00:00"
-        starts_at = dt.fromisoformat(f"{date_str}T{time_str}")
+        starts_at = datetime.fromisoformat(f"{date_str}T{time_str}")
 
         price_str = str(raw.get("price") or "")
         price_min = None
@@ -272,8 +274,13 @@ def scrape_source(source_slug: str):
 
 @celery_app.task(name="worker.tasks.discovery.scrape_all_sources")
 def scrape_all_sources():
-    """Daily: scrape all active discovered/local sources."""
-    async def _run_all():
+    """Daily: fan-out scrape tasks for all active discovered/local sources.
+
+    Dispatches individual scrape_source tasks rather than running serially,
+    so scrapes can execute in parallel across workers and be individually retried.
+    API-backed sources (ticketmaster, etc.) are excluded — they have their own tasks.
+    """
+    async def _get_slugs() -> list[str]:
         async with _session_factory() as db:
             result = await db.execute(
                 select(EventSource.slug).where(
@@ -281,16 +288,10 @@ def scrape_all_sources():
                     EventSource.source_type.in_(["discovered", "scraper"]),
                 )
             )
-            slugs = result.scalars().all()
+            return result.scalars().all()
 
-        total = 0
-        for slug in slugs:
-            try:
-                count = await _run_scrape_source(slug)
-                total += count
-            except Exception as e:
-                logger.error(f"[scrape_all] {slug} failed: {e}")
-        return total
-
-    total = asyncio.run(_run_all())
-    return f"Scraped {total} total events across all sources"
+    slugs = asyncio.run(_get_slugs())
+    for slug in slugs:
+        scrape_source.delay(slug)
+    logger.info(f"[scrape_all] Dispatched {len(slugs)} scrape tasks")
+    return f"Dispatched {len(slugs)} scrape tasks"
