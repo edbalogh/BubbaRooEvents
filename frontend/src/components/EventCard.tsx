@@ -112,9 +112,9 @@ export default function EventCard({ event, showActions, onSave, onDismiss, onRep
             {formatPrice(event.price_min, event.price_max, event.currency)}
             <ConflictIndicator conflicts={event.conflicts?.price_min} fieldLabel="Price" />
           </span>
-          {event.categories.length > 0 && (
+          {(event.categories?.length ?? 0) > 0 && (
             <div className="flex gap-1">
-              {event.categories.slice(0, 2).map((cat) => (
+              {event.categories!.slice(0, 2).map((cat) => (
                 <span
                   key={cat}
                   className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs"
