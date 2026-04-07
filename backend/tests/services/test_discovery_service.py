@@ -101,3 +101,33 @@ async def test_extract_events_returns_empty_on_failure():
         mock_llm, markdown="# Page with no events", source_url="https://example.com"
     )
     assert events == []
+
+
+@pytest.mark.asyncio
+async def test_score_source_candidates_returns_empty_when_both_calls_fail():
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(side_effect=[
+        "not json at all",
+        "still not json",
+    ])
+
+    results = await score_source_candidates(
+        mock_llm,
+        city="Nashville",
+        candidates=[{"url": "https://example.com", "snippet": "events"}],
+        threshold=0.7,
+    )
+    assert results == []
+
+
+@pytest.mark.asyncio
+async def test_confirm_source_returns_fallback_when_both_calls_fail():
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(side_effect=[
+        "not json",
+        "also not json",
+    ])
+
+    result = await confirm_source(mock_llm, markdown="# Some page content")
+    assert result["is_event_site"] is False
+    assert result["event_count_estimate"] == 0
