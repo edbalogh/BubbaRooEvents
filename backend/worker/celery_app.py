@@ -14,6 +14,7 @@ celery_app = Celery(
         "worker.tasks.preferences",
         "worker.tasks.scrapers",
         "worker.tasks.discovery",
+        "worker.tasks.dedup",
     ],
 )
 
@@ -85,6 +86,11 @@ celery_app.conf.update(
         "scrape-all-sources-daily": {
             "task": "worker.tasks.discovery.scrape_all_sources",
             "schedule": crontab(hour=3, minute=0),  # Daily 3am UTC
+        },
+        # --- Deduplication ---
+        "dedup-events-hourly": {
+            "task": "worker.tasks.dedup.dedup_events",
+            "schedule": crontab(minute=30),  # :30 past every hour
         },
     },
 )
