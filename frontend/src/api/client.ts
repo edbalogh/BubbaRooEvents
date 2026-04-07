@@ -69,6 +69,12 @@ export interface CanonicalEventResponse {
   status: string
 }
 
+export interface FlaggedDuplicateItem {
+  id: string
+  title: string
+  flagged_duplicate: string
+}
+
 export interface EventListResponse {
   events: Event[]
   total: number
@@ -442,7 +448,7 @@ export const api = {
     return request(`/events/duplicates/${eventAId}/merge/${eventBId}`, { method: 'POST' })
   },
 
-  getFlaggedDuplicates(): Promise<CanonicalEventResponse[]> {
+  getFlaggedDuplicates(): Promise<FlaggedDuplicateItem[]> {
     return request('/events/duplicates')
   },
 

@@ -28,7 +28,7 @@ function formatDate(dateStr: string): string {
   })
 }
 
-function formatPrice(min: number | null, max: number | null, currency: string): string {
+function formatPrice(min: number | null, max: number | null, _currency: string): string {
   if (min === null && max === null) return 'Price TBD'
   if (min === 0 && (max === 0 || max === null)) return 'Free'
   if (min !== null && max !== null && min !== max) {
