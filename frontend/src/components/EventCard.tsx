@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { Event } from '../api/client'
+import { ConflictIndicator } from './ConflictIndicator'
 
 const SOURCE_LABELS: Record<string, string> = {
   ticketmaster: 'Ticketmaster',
@@ -41,9 +42,10 @@ interface EventCardProps {
   showActions?: boolean
   onSave?: (eventId: string) => void
   onDismiss?: (eventId: string) => void
+  onReportDuplicate?: (eventId: string) => void
 }
 
-export default function EventCard({ event, showActions, onSave, onDismiss }: EventCardProps) {
+export default function EventCard({ event, showActions, onSave, onDismiss, onReportDuplicate }: EventCardProps) {
   const [saved, setSaved] = useState(false)
 
   const handleSave = (e: React.MouseEvent) => {
@@ -107,6 +109,7 @@ export default function EventCard({ event, showActions, onSave, onDismiss }: Eve
         <div className="flex items-center justify-between pt-1">
           <span className="text-sm font-medium text-gray-700">
             {formatPrice(event.price_min, event.price_max, event.currency)}
+            <ConflictIndicator conflicts={event.conflicts?.price_min} fieldLabel="Price" />
           </span>
           {event.categories.length > 0 && (
             <div className="flex gap-1">
@@ -140,6 +143,14 @@ export default function EventCard({ event, showActions, onSave, onDismiss }: Eve
             >
               Not interested
             </button>
+            {onReportDuplicate && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReportDuplicate(event.id) }}
+                className="text-xs text-gray-400 hover:text-red-400 bg-transparent border-0 cursor-pointer"
+              >
+                Report duplicate
+              </button>
+            )}
           </div>
         )}
       </div>
