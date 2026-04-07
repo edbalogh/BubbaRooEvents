@@ -1,9 +1,10 @@
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.canonical_event import CanonicalEvent
+from app.models.event import RawEvent
 from app.models.venue import Venue
 
 
@@ -25,10 +26,25 @@ def build_event_query(
         query = query.where(CanonicalEvent.title.ilike(f"%{q}%"))
 
     if city:
+        # Match via resolved venue city OR via any linked raw event's city (for events
+        # where venue resolution hasn't run yet or the venue has no city set).
+        raw_city_subq = (
+            select(RawEvent.canonical_event_id)
+            .where(
+                RawEvent.canonical_event_id == CanonicalEvent.id,
+                func.lower(RawEvent.city) == city.lower(),
+            )
+            .exists()
+        )
         query = (
             query
-            .join(Venue, CanonicalEvent.venue_id == Venue.id)
-            .where(func.lower(Venue.city) == city.lower())
+            .outerjoin(Venue, CanonicalEvent.venue_id == Venue.id)
+            .where(
+                or_(
+                    func.lower(Venue.city) == city.lower(),
+                    raw_city_subq,
+                )
+            )
         )
 
     if category:
