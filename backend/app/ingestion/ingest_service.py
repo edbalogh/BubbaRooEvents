@@ -81,4 +81,12 @@ async def upsert_events(db: AsyncSession, events: list[NormalizedEvent]) -> int:
         upserted += 1
 
     await db.commit()
+
+    # Trigger dedup for newly ingested events (non-blocking)
+    try:
+        from worker.tasks.dedup import dedup_events
+        dedup_events.delay(limit=len(events))
+    except Exception:
+        pass  # Worker may not be available in all test contexts
+
     return upserted
