@@ -90,7 +90,7 @@ async def generate_embeddings_batch(db: AsyncSession, batch_size: int = 100) -> 
         vector_list = vector.tolist()
         await db.execute(
             text(
-                "UPDATE events SET embedding = :vec WHERE id = :event_id"
+                "UPDATE raw_events SET embedding = :vec WHERE id = :event_id"
             ).bindparams(
                 vec=str(vector_list),
                 event_id=str(event.id),
@@ -118,7 +118,7 @@ async def compute_user_taste_vector(
         text("""
             SELECT e.embedding
             FROM user_event_interactions uei
-            JOIN events e ON e.id = uei.event_id
+            JOIN raw_events e ON e.id = uei.event_id
             WHERE uei.user_id = :user_id
               AND uei.interaction IN ('saved', 'clicked', 'attended')
               AND e.embedding IS NOT NULL

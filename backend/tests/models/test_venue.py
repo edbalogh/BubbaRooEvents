@@ -1,5 +1,4 @@
 import uuid
-import pytest
 from app.models.venue import Venue
 
 

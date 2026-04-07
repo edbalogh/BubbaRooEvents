@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime, UTC
-import pytest
 from app.models.canonical_event import CanonicalEvent
 
 
