@@ -17,7 +17,7 @@ class OllamaProvider(LLMProvider):
         self._model = model
 
     async def complete(self, system: str, user: str, max_tokens: int) -> str:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             response = await client.post(
                 f"{self._base_url}/api/chat",
                 json={
@@ -27,6 +27,7 @@ class OllamaProvider(LLMProvider):
                         {"role": "user", "content": user},
                     ],
                     "stream": False,
+                    "think": False,
                     "options": {"num_predict": max_tokens},
                 },
             )
@@ -36,4 +37,5 @@ class OllamaProvider(LLMProvider):
         if response.status_code != 200:
             raise RuntimeError(f"Ollama error {response.status_code}: {response.text}")
 
-        return response.json()["message"]["content"]
+        msg = response.json()["message"]
+        return msg.get("content") or msg.get("thinking", "")

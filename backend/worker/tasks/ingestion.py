@@ -8,11 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
-from app.ingestion.bandsintown import BandsintownAdapter
-from app.ingestion.eventbrite import EventbriteAdapter
 from app.ingestion.ingest_service import upsert_events
-from app.ingestion.meetup import MeetupAdapter
-from app.ingestion.seatgeek import SeatGeekAdapter
 from app.ingestion.ticketmaster import TicketmasterAdapter
 from app.models.user import User
 from worker.celery_app import celery_app
@@ -47,26 +43,6 @@ async def _get_active_cities() -> dict[str, tuple[float, float]]:
     return cities
 
 
-async def _run_adapter_ingestion(adapter, adapter_name: str):
-    """Generic ingestion runner for any adapter."""
-    today = datetime.now(UTC).date()
-    date_to = today + timedelta(days=30)
-
-    total = 0
-    active_cities = await _get_active_cities()
-    async with _session_factory() as db:
-        for city, (lat, lon) in active_cities.items():
-            try:
-                events = await adapter.fetch_events(
-                    city, today, date_to, lat=lat, lon=lon,
-                )
-                count = await upsert_events(db, events)
-                total += count
-                logger.info(f"[{adapter_name}] {city}: {count} events")
-            except Exception as e:
-                logger.error(f"[{adapter_name}] {city} failed: {e}")
-    return total
-
 
 async def _run_ticketmaster_ingestion():
     adapter = TicketmasterAdapter()
@@ -86,38 +62,6 @@ async def _run_ticketmaster_ingestion():
     return total
 
 
-async def _run_meetup_ingestion():
-    adapter = MeetupAdapter()
-    return await _run_adapter_ingestion(adapter, "meetup")
-
-
-async def _run_eventbrite_ingestion():
-    adapter = EventbriteAdapter()
-    return await _run_adapter_ingestion(adapter, "eventbrite")
-
-
-async def _run_bandsintown_ingestion():
-    adapter = BandsintownAdapter()
-    return await _run_adapter_ingestion(adapter, "bandsintown")
-
-
-async def _run_seatgeek_ingestion():
-    adapter = SeatGeekAdapter()
-    today = datetime.now(UTC).date()
-    date_to = today + timedelta(days=30)
-    cities = await _get_active_cities()
-
-    total = 0
-    async with _session_factory() as db:
-        for city in cities:
-            try:
-                events = await adapter.fetch_events(city, today, date_to)
-                count = await upsert_events(db, events)
-                total += count
-            except Exception as e:
-                logger.error(f"[seatgeek] {city} failed: {e}")
-    return total
-
 
 # --- Celery Tasks ---
 
@@ -133,32 +77,26 @@ def ingest_ticketmaster():
 
 @celery_app.task(name="worker.tasks.ingestion.ingest_meetup")
 def ingest_meetup():
-    """Ingest events from Meetup.com (community events, tech meetups, etc.)."""
-    count = asyncio.run(_run_meetup_ingestion())
-    return f"Ingested {count} events from Meetup"
+    """Meetup public API is defunct — disabled."""
+    return "Skipped: Meetup public API shut down in 2023"
 
 
 @celery_app.task(name="worker.tasks.ingestion.ingest_eventbrite")
 def ingest_eventbrite():
-    """Ingest events from Eventbrite (workshops, classes, conferences, etc.)."""
-    count = asyncio.run(_run_eventbrite_ingestion())
-    return f"Ingested {count} events from Eventbrite"
+    """Eventbrite location search API removed in 2020 — disabled."""
+    return "Skipped: Eventbrite location search API permanently removed"
 
 
 @celery_app.task(name="worker.tasks.ingestion.ingest_bandsintown")
 def ingest_bandsintown():
-    """Ingest concert/live music events from Bandsintown."""
-    count = asyncio.run(_run_bandsintown_ingestion())
-    return f"Ingested {count} events from Bandsintown"
+    """Bandsintown location API requires partnership key — disabled."""
+    return "Skipped: Bandsintown location search requires partnership key"
 
 
 @celery_app.task(name="worker.tasks.ingestion.ingest_seatgeek")
 def ingest_seatgeek():
-    """Ingest events from SeatGeek API (concerts, sports, theatre)."""
-    if not settings.seatgeek_client_id:
-        return "Skipped: No SeatGeek client_id configured"
-    count = asyncio.run(_run_seatgeek_ingestion())
-    return f"Ingested {count} events from SeatGeek"
+    """SeatGeek public API program shut down — disabled."""
+    return "Skipped: SeatGeek public API program shut down"
 
 
 async def _run_ingest_city_now(city: str) -> int:
@@ -179,47 +117,6 @@ async def _run_ingest_city_now(city: str) -> int:
                 logger.info(f"[ingest_city_now][ticketmaster] {city}: {len(events)} events")
         except Exception as e:
             logger.error(f"[ingest_city_now][ticketmaster] {city} failed: {e}")
-
-    # SeatGeek
-    if settings.seatgeek_client_id:
-        try:
-            async with _session_factory() as db:
-                adapter = SeatGeekAdapter()
-                events = await adapter.fetch_events(city, today, date_to)
-                total += await upsert_events(db, events)
-                logger.info(f"[ingest_city_now][seatgeek] {city}: {len(events)} events")
-        except Exception as e:
-            logger.error(f"[ingest_city_now][seatgeek] {city} failed: {e}")
-
-    # Bandsintown
-    try:
-        async with _session_factory() as db:
-            adapter = BandsintownAdapter()
-            events = await adapter.fetch_events(city, today, date_to, lat=lat, lon=lon)
-            total += await upsert_events(db, events)
-            logger.info(f"[ingest_city_now][bandsintown] {city}: {len(events)} events")
-    except Exception as e:
-        logger.error(f"[ingest_city_now][bandsintown] {city} failed: {e}")
-
-    # Eventbrite
-    try:
-        async with _session_factory() as db:
-            adapter = EventbriteAdapter()
-            events = await adapter.fetch_events(city, today, date_to, lat=lat, lon=lon)
-            total += await upsert_events(db, events)
-            logger.info(f"[ingest_city_now][eventbrite] {city}: {len(events)} events")
-    except Exception as e:
-        logger.error(f"[ingest_city_now][eventbrite] {city} failed: {e}")
-
-    # Meetup
-    try:
-        async with _session_factory() as db:
-            adapter = MeetupAdapter()
-            events = await adapter.fetch_events(city, today, date_to, lat=lat, lon=lon)
-            total += await upsert_events(db, events)
-            logger.info(f"[ingest_city_now][meetup] {city}: {len(events)} events")
-    except Exception as e:
-        logger.error(f"[ingest_city_now][meetup] {city} failed: {e}")
 
     return total
 

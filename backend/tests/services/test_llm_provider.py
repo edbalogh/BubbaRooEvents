@@ -12,8 +12,8 @@ def test_ollama_settings_have_defaults():
         database_url_sync="postgresql://x:x@localhost/x",
     )
     assert s.ollama_base_url == "http://localhost:11434"
-    assert s.ollama_recommend_model == "qwen3.5:9b"
-    assert s.ollama_trip_model == "gpt-oss:latest"
+    assert s.ollama_recommend_model == "gemma4:26b"
+    assert s.ollama_trip_model == "gemma4:26b"
 
 
 def test_anthropic_key_is_gone():
