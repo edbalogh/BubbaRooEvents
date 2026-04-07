@@ -1,7 +1,7 @@
 """API endpoints for event sources and user source preferences."""
 
-from fastapi import APIRouter, Body, Depends, Query
-from sqlalchemy import select
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -9,6 +9,7 @@ from app.core.dependencies import get_current_user
 from app.ingestion.local_discovery import discover_sources_for_city, get_known_cities
 from app.models.source import EventSource, UserSourcePreference
 from app.models.user import User
+from worker.tasks.discovery import discover_sources, scrape_source
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -144,6 +145,55 @@ async def update_source_preference(
 
     await db.flush()
     return {"status": "updated", "preference": preference}
+
+
+@router.post("/discovery/run")
+async def run_discovery():
+    """Trigger source discovery now (admin use)."""
+    task = discover_sources.delay()
+    return {"job_id": task.id, "status": "queued"}
+
+
+@router.get("/discovery/status")
+async def discovery_status(db: AsyncSession = Depends(get_db)):
+    """Last discovery run info."""
+    result = await db.execute(
+        select(func.max(EventSource.last_discovery_at)).where(
+            EventSource.discovered_by == "llm_discovery"
+        )
+    )
+    last_run = result.scalar_one_or_none()
+    count_result = await db.execute(
+        select(func.count()).select_from(EventSource).where(
+            EventSource.discovered_by == "llm_discovery"
+        )
+    )
+    total_discovered = count_result.scalar_one()
+    return {"last_discovery_at": last_run, "total_discovered_sources": total_discovered}
+
+
+@router.post("/{slug}/refresh")
+async def refresh_source(slug: str, db: AsyncSession = Depends(get_db)):
+    """Trigger immediate scrape of a specific source. Returns task ID for polling."""
+    result = await db.execute(select(EventSource).where(EventSource.slug == slug))
+    source = result.scalar_one_or_none()
+    if not source:
+        raise HTTPException(status_code=404, detail=f"Source '{slug}' not found")
+    task = scrape_source.delay(slug)
+    return {"job_id": task.id, "status": "queued", "source": slug}
+
+
+@router.get("/{slug}/refresh/{job_id}")
+async def get_refresh_status(slug: str, job_id: str):
+    """Poll scrape job status."""
+    from celery.result import AsyncResult
+    from worker.celery_app import celery_app as _celery
+    result = AsyncResult(job_id, app=_celery)
+    return {
+        "job_id": job_id,
+        "status": result.status,
+        "result": str(result.result) if result.ready() else None,
+    }
 
 
 @router.post("/register")
