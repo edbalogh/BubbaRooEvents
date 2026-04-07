@@ -13,7 +13,8 @@ const SOURCE_LABELS: Record<string, string> = {
   'mohawk-austin': 'Mohawk Austin',
 }
 
-function formatSource(slug: string): string {
+function formatSource(slug: string | null | undefined): string {
+  if (!slug) return ''
   return SOURCE_LABELS[slug] ?? slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
@@ -62,7 +63,7 @@ export default function EventCard({ event, showActions, onSave, onDismiss, onRep
   }
 
   // wraps single source; slice/overflow ready for future multi-source support
-  const sources = [event.source]
+  const sources = [event.source].filter(Boolean) as string[]
   const visibleSources = sources.slice(0, 2)
   const overflow = sources.length - visibleSources.length
 
