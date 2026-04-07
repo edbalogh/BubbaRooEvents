@@ -2,21 +2,22 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, Float, Index, Integer, Numeric, String, Text, func
+from sqlalchemy import DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
 
 
-class Event(Base):
-    __tablename__ = "events"
+class RawEvent(Base):
+    __tablename__ = "raw_events"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     external_id: Mapped[str | None] = mapped_column(String(255))
     source: Mapped[str] = mapped_column(String(50), nullable=False)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
+    venue_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("venues.id"), nullable=True)
     venue_name: Mapped[str | None] = mapped_column(String(300))
     venue_address: Mapped[str | None] = mapped_column(Text)
     city: Mapped[str | None] = mapped_column(String(100), index=True)
@@ -34,6 +35,9 @@ class Event(Base):
     image_url: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
     raw_data: Mapped[dict | None] = mapped_column(JSONB)
+    canonical_event_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("canonical_events.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
