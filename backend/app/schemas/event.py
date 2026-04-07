@@ -31,8 +31,31 @@ class EventResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CanonicalEventResponse(BaseModel):
+    id: UUID
+    title: str
+    description: str | None
+    venue_id: UUID | None
+    starts_at: datetime
+    ends_at: datetime | None
+    price_min: Decimal | None
+    price_max: Decimal | None
+    currency: str
+    url: str | None
+    image_url: str | None
+    categories: list | None
+    conflicts: dict | None
+    field_sources: dict | None
+    status: str
+    # Denormalized from venue join (populated by service layer)
+    venue_name: str | None = None
+    venue_city: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class EventListResponse(BaseModel):
-    events: list[EventResponse]
+    events: list[CanonicalEventResponse]
     total: int
     page: int
     per_page: int

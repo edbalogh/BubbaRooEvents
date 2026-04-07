@@ -14,7 +14,7 @@ from app.core.cache import (
     tonight_key,
 )
 from app.core.database import get_db
-from app.schemas.event import EventListResponse, EventResponse
+from app.schemas.event import CanonicalEventResponse, EventListResponse
 from app.services.event_service import get_event_by_id, get_tonight_events, search_events
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -49,7 +49,7 @@ async def list_events(
         page=page, per_page=per_page,
     )
     result = EventListResponse(
-        events=[EventResponse.model_validate(e) for e in events],
+        events=[CanonicalEventResponse.model_validate(e) for e in events],
         total=total,
         page=page,
         per_page=per_page,
@@ -58,7 +58,7 @@ async def list_events(
     return result
 
 
-@router.get("/tonight", response_model=list[EventResponse])
+@router.get("/tonight", response_model=list[CanonicalEventResponse])
 async def tonight_events(
     city: str = Query(..., description="City name"),
     db: AsyncSession = Depends(get_db),
@@ -69,14 +69,14 @@ async def tonight_events(
         return cached
 
     events = await get_tonight_events(db, city)
-    result = [EventResponse.model_validate(e).model_dump() for e in events]
+    result = [CanonicalEventResponse.model_validate(e).model_dump() for e in events]
     await cache_set(cache_key, result, CACHE_TTL_TONIGHT)
     return result
 
 
-@router.get("/{event_id}", response_model=EventResponse)
+@router.get("/{event_id}", response_model=CanonicalEventResponse)
 async def get_event(event_id: UUID, db: AsyncSession = Depends(get_db)):
     event = await get_event_by_id(db, event_id)
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-    return EventResponse.model_validate(event)
+    return CanonicalEventResponse.model_validate(event)
