@@ -16,13 +16,18 @@ class Settings(BaseSettings):
 
     # External APIs
     ticketmaster_api_key: str = ""
-    seatgeek_client_id: str = ""
-    seatgeek_client_secret: str = ""
 
     # AI (Ollama)
     ollama_base_url: str = "http://localhost:11434"
     ollama_recommend_model: str = "gemma4:26b"
     ollama_trip_model: str = "gemma4:26b"
+
+    # Discovery & scraping
+    discovery_search_model: str = "gemma4:26b"
+    discovery_extract_model: str = "gemma4:26b"
+    discovery_source_score_threshold: float = 0.7
+    discovery_dedup_confidence_threshold: float = 0.8
+    crawl4ai_timeout: int = 30
 
     # Slack bot
     slack_signing_secret: str = ""
