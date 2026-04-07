@@ -14,8 +14,8 @@ from app.services.llm_provider import LLMProvider
 logger = logging.getLogger(__name__)
 
 # Source priority for field selection (lower index = higher priority).
-# Sources not in this list are assumed to be local venue scrapers and rank
-# between "scraper" and the national APIs.
+# Sources not in this list (unknown local venues) rank at the same tier as
+# "scraper" — i.e., they beat national ticket APIs but not explicit venue sources.
 _SOURCE_PRIORITY = [
     "venue",        # any source containing "venue" has highest priority
     "scraper",      # local scrapers over national APIs
@@ -27,9 +27,9 @@ _SOURCE_PRIORITY = [
     "discovered",
 ]
 
-# Rank assigned to unknown sources (local venue sites, etc.) — sits just above
-# the national API tier so direct venue sources beat Ticketmaster et al.
-_UNKNOWN_SOURCE_RANK = 1  # same tier as "scraper"
+# Rank assigned to unknown sources (local venue sites, etc.) — same tier as
+# "scraper", so unknown local sources beat national APIs like Ticketmaster.
+_UNKNOWN_SOURCE_RANK = 1  # same index as "scraper" in _SOURCE_PRIORITY
 
 # Fields where "longest wins" instead of source priority
 _LONGEST_WINS_FIELDS = {"description", "title"}

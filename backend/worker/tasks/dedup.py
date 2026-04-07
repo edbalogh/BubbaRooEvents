@@ -52,7 +52,7 @@ async def _resolve_venue(db: AsyncSession, raw: RawEvent) -> uuid.UUID | None:
         state=raw.state,
         lat=raw.latitude,
         lon=raw.longitude,
-        source_slugs=[raw.source],
+        source_slugs={raw.source: True},
     )
     try:
         db.add(new_venue)
@@ -124,7 +124,7 @@ async def _run_dedup_events(limit: int = 500) -> int:
                 canonical_id = None
 
                 for candidate in candidates:
-                    # Strong match: same venue and title similarity
+                    # Strong match: same resolved venue
                     if venue_id and candidate.venue_id == venue_id:
                         canonical_id = candidate.id
                         break

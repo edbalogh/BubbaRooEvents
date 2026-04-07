@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock
 from app.services.dedup_service import (
+    are_duplicate_events,
     make_venue_slug,
     fuzzy_match_venue_name,
     merge_canonical_event_fields,
@@ -94,3 +95,39 @@ def test_merge_canonical_event_fields_picks_best():
     assert "intimate" in merged["description"]
     assert "bluebirdcafe.com" in merged["url"]
     assert "price_min" in merged["conflicts"]
+
+
+EVENT_A = {"title": "Jazz Night", "venue_name": "Bluebird Cafe", "starts_at": "2026-05-01T20:00:00"}
+EVENT_B = {"title": "Jazz Night", "venue_name": "Bluebird Cafe", "starts_at": "2026-05-01T20:00:00"}
+
+
+@pytest.mark.asyncio
+async def test_are_duplicate_events_returns_true_above_threshold():
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value='{"is_duplicate": true, "confidence": 0.95, "reason": "same event"}')
+    result = await are_duplicate_events(mock_llm, EVENT_A, EVENT_B, confidence_threshold=0.8)
+    assert result is True
+
+
+@pytest.mark.asyncio
+async def test_are_duplicate_events_returns_false_below_threshold():
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value='{"is_duplicate": true, "confidence": 0.5, "reason": "maybe same"}')
+    result = await are_duplicate_events(mock_llm, EVENT_A, EVENT_B, confidence_threshold=0.8)
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_are_duplicate_events_returns_false_when_not_duplicate():
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value='{"is_duplicate": false, "confidence": 0.9, "reason": "different events"}')
+    result = await are_duplicate_events(mock_llm, EVENT_A, {"title": "Different Show", "starts_at": "2026-05-01T20:00:00"})
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_are_duplicate_events_returns_false_on_malformed_response():
+    mock_llm = AsyncMock()
+    mock_llm.complete = AsyncMock(return_value="I cannot determine this")
+    result = await are_duplicate_events(mock_llm, EVENT_A, EVENT_B)
+    assert result is False

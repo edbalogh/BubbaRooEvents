@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import date
 
 from sqlalchemy import select
@@ -11,6 +12,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.ingestion.base import NormalizedEvent
 from app.models.category import Category
 from app.models.event import EventCategory, RawEvent
+
+logger = logging.getLogger(__name__)
 
 
 async def upsert_events(db: AsyncSession, events: list[NormalizedEvent]) -> int:
@@ -82,11 +85,12 @@ async def upsert_events(db: AsyncSession, events: list[NormalizedEvent]) -> int:
 
     await db.commit()
 
-    # Trigger dedup for newly ingested events (non-blocking)
+    # Trigger dedup for newly ingested events (non-blocking).
+    # limit is a hint — dedup processes the global unlinked backlog up to that size.
     try:
         from worker.tasks.dedup import dedup_events
         dedup_events.delay(limit=len(events))
-    except Exception:
-        pass  # Worker may not be available in all test contexts
+    except Exception as e:
+        logger.debug(f"[ingest] Could not dispatch dedup task: {e}")
 
     return upserted
