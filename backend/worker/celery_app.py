@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -12,6 +13,7 @@ celery_app = Celery(
         "worker.tasks.notifications",
         "worker.tasks.preferences",
         "worker.tasks.scrapers",
+        "worker.tasks.discovery",
     ],
 )
 
@@ -74,6 +76,15 @@ celery_app.conf.update(
         "scrape-venues": {
             "task": "worker.tasks.scrapers.scrape_venues",
             "schedule": 21600.0,  # every 6 hours
+        },
+        # --- Source Discovery & Scraping ---
+        "discover-sources-weekly": {
+            "task": "worker.tasks.discovery.discover_sources",
+            "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2am UTC
+        },
+        "scrape-all-sources-daily": {
+            "task": "worker.tasks.discovery.scrape_all_sources",
+            "schedule": crontab(hour=3, minute=0),  # Daily 3am UTC
         },
     },
 )
