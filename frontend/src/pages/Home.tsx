@@ -5,6 +5,7 @@ import { useCitySeeding } from '../hooks/useCitySeeding'
 import SearchBar from '../components/SearchBar'
 import EventList from '../components/EventList'
 import CityLoadingScreen from '../components/CityLoadingScreen'
+import { NewSourceBanner } from '../components/NewSourceBanner'
 
 export default function Home() {
   const { user } = useAuth()
@@ -14,8 +15,22 @@ export default function Home() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [searchParams, setSearchParams] = useState<Record<string, string>>({ city: defaultCity })
+  const [newSourceCount, setNewSourceCount] = useState(0)
+  const [bannerDismissed, setBannerDismissed] = useState(() => !!localStorage.getItem('new_sources_dismissed_at'))
 
   const { state: seedState, events: seedEvents, eventCount, city: seedCity } = useCitySeeding(defaultCity)
+
+  useEffect(() => {
+    api.getDiscoveryStatus().then((status) => {
+      const dismissedAt = localStorage.getItem('new_sources_dismissed_at')
+      if (
+        status.last_new_source_discovered_at &&
+        (!dismissedAt || new Date(status.last_new_source_discovered_at) > new Date(dismissedAt))
+      ) {
+        setNewSourceCount(status.total_discovered_sources)
+      }
+    }).catch(() => {/* ignore */})
+  }, [])
 
   const loadEvents = useCallback(async (params: Record<string, string>) => {
     setLoading(true)
@@ -79,6 +94,15 @@ export default function Home() {
           {defaultCity ? ` in ${defaultCity}` : ' near you'}
         </p>
       </div>
+      {!bannerDismissed && newSourceCount > 0 && (
+        <NewSourceBanner
+          count={newSourceCount}
+          onDismiss={() => {
+            setBannerDismissed(true)
+            localStorage.setItem('new_sources_dismissed_at', new Date().toISOString())
+          }}
+        />
+      )}
       <SearchBar onSearch={handleSearch} initialCity={defaultCity} />
       <EventList events={events} loading={loading} total={total} />
     </div>
