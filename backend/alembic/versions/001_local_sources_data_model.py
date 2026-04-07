@@ -79,6 +79,8 @@ def upgrade() -> None:
     ))
     op.create_index("ix_raw_events_canonical_event_id", "raw_events", ["canonical_event_id"])
 
+    # 5. event_categories FK needs no update — event_id is UUID on raw_events, constraint still valid
+
     # 6. Extend event_sources with new columns
     op.add_column("event_sources", sa.Column("last_scraped_at", sa.DateTime(timezone=True), nullable=True))
     op.add_column("event_sources", sa.Column("last_discovery_at", sa.DateTime(timezone=True), nullable=True))
@@ -101,17 +103,24 @@ def upgrade() -> None:
         FROM raw_events
     """)
 
+    # Use IS NOT DISTINCT FROM for nullable url column (NULL = NULL is always false in SQL).
+    # Subquery with LIMIT 1 ensures deterministic 1:1 mapping when duplicate (title, starts_at, url)
+    # tuples exist across sources.
     op.execute("""
         UPDATE raw_events re
-        SET canonical_event_id = ce.id
-        FROM canonical_events ce
-        WHERE ce.title = re.title
-          AND ce.starts_at = re.starts_at
-          AND ce.url = re.url
+        SET canonical_event_id = (
+            SELECT ce.id
+            FROM canonical_events ce
+            WHERE ce.title = re.title
+              AND ce.starts_at = re.starts_at
+              AND ce.url IS NOT DISTINCT FROM re.url
+            LIMIT 1
+        )
     """)
 
 
 def downgrade() -> None:
+    # 1. Remove event_sources additions
     op.drop_column("event_sources", "discovered_by")
     op.drop_column("event_sources", "discovery_confidence")
     op.drop_column("event_sources", "scrape_config")
@@ -119,15 +128,20 @@ def downgrade() -> None:
     op.drop_column("event_sources", "last_discovery_at")
     op.drop_column("event_sources", "last_scraped_at")
 
+    # 2. Remove raw_events FK columns (also drops FK constraints)
     op.drop_index("ix_raw_events_canonical_event_id", "raw_events")
     op.drop_column("raw_events", "canonical_event_id")
     op.drop_column("raw_events", "venue_id")
 
+    # 3. Drop canonical_events and venues before renaming table (cleaner dependency order)
+    op.drop_index("ix_canonical_events_status", "canonical_events")
+    op.drop_index("ix_canonical_events_starts_at", "canonical_events")
+    op.drop_table("canonical_events")
+    op.drop_index("ix_venues_city", "venues")
+    op.drop_table("venues")
+
+    # 4. Rename indexes and table back
     op.execute("ALTER INDEX ix_raw_events_status RENAME TO ix_events_status")
     op.execute("ALTER INDEX ix_raw_events_starts_at RENAME TO ix_events_starts_at")
     op.execute("ALTER INDEX ix_raw_events_city RENAME TO ix_events_city")
     op.rename_table("raw_events", "events")
-
-    op.drop_table("canonical_events")
-    op.drop_index("ix_venues_city", "venues")
-    op.drop_table("venues")
