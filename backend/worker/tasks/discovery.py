@@ -7,7 +7,9 @@ import hashlib
 import logging
 import re
 from datetime import UTC, datetime
+from urllib.parse import urljoin, urlparse
 
+import httpx
 from duckduckgo_search import DDGS
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert
@@ -51,14 +53,56 @@ def _is_blocklisted(url: str) -> bool:
     return any(blocked in url.lower() for blocked in _BLOCKLIST)
 
 
+async def _detect_ical_feed(page_url: str) -> str | None:
+    """Probe a page's HTML for iCal/ICS feed links. Returns the feed URL or None."""
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
+            resp = await client.get(page_url, headers={"User-Agent": "BubbaRooEvents/1.0"})
+            resp.raise_for_status()
+            html = resp.text
+
+        # 1. <link rel="alternate" type="text/calendar" href="...">
+        import re as _re
+        link_match = _re.search(
+            r'<link[^>]+type=["\']text/calendar["\'][^>]+href=["\']([^"\']+)["\']',
+            html, _re.IGNORECASE
+        )
+        if not link_match:
+            link_match = _re.search(
+                r'<link[^>]+href=["\']([^"\']+)["\'][^>]+type=["\']text/calendar["\']',
+                html, _re.IGNORECASE
+            )
+        if link_match:
+            return urljoin(page_url, link_match.group(1))
+
+        # 2. Any href ending in .ics
+        ics_match = _re.search(r'href=["\']([^"\']+\.ics(?:\?[^"\']*)?)["\']', html, _re.IGNORECASE)
+        if ics_match:
+            return urljoin(page_url, ics_match.group(1))
+
+        # 3. Common well-known paths — probe /calendar.ics, /events.ics, /feed.ics
+        base = f"{urlparse(page_url).scheme}://{urlparse(page_url).netloc}"
+        for path in ("/calendar.ics", "/events.ics", "/feed.ics", "/calendar/ical"):
+            try:
+                probe = await client.head(f"{base}{path}", timeout=5)
+                ct = probe.headers.get("content-type", "")
+                if probe.status_code == 200 and ("calendar" in ct or path.endswith(".ics")):
+                    return f"{base}{path}"
+            except Exception:
+                pass
+
+    except Exception as e:
+        logger.debug(f"[discovery] iCal probe failed for {page_url}: {e}")
+
+    return None
+
+
 async def _get_active_cities() -> list[str]:
-    cities = {"Nashville"}
     async with _session_factory() as db:
         result = await db.execute(
             select(User.home_city).where(User.home_city.isnot(None)).distinct()
         )
-        cities.update(result.scalars().all())
-    return list(cities)
+        return result.scalars().all()
 
 
 async def _get_known_urls() -> set[str]:
@@ -122,6 +166,12 @@ async def _run_discover_sources() -> int:
                 slug_base = re.sub(r"[^a-z0-9-]", "-", site_name.lower())[:43].strip("-")
                 slug = f"{slug_base}-{url_hash}"
 
+                # Probe for an iCal feed on this site
+                ical_url = await _detect_ical_feed(url)
+                if ical_url:
+                    logger.info(f"[discovery] Found iCal feed for {site_name}: {ical_url}")
+                scrape_config = {"ical_url": ical_url} if ical_url else None
+
                 async with _session_factory() as db:
                     stmt = insert(EventSource).values(
                         slug=slug,
@@ -136,6 +186,7 @@ async def _run_discover_sources() -> int:
                         discovery_confidence=candidate["score"],
                         discovered_by="llm_discovery",
                         last_discovery_at=datetime.now(UTC),
+                        scrape_config=scrape_config,
                     ).on_conflict_do_nothing(index_elements=["slug"])
                     await db.execute(stmt)
                     await db.commit()
@@ -167,19 +218,40 @@ async def _run_scrape_source(source_slug: str) -> int:
 
     logger.info(f"[scraper] Scraping {source_slug} ({source.url})")
 
-    # Fast path: try JSON-LD structured data via HTML fetch (independent of Crawl4AI)
     events: list[NormalizedEvent] = []
-    try:
-        from app.ingestion.scrapers.generic_jsonld import GenericJsonLdScraper
-        scraper = GenericJsonLdScraper()
-        scraper.source_name = source_slug
-        scraper.base_url = source.url
-        jsonld_events = await scraper.fetch_events()
-        if jsonld_events:
-            events = jsonld_events
-            logger.info(f"[scraper] {source_slug}: {len(events)} events via JSON-LD fast path")
-    except Exception as e:
-        logger.debug(f"[scraper] JSON-LD fast path failed for {source_slug}: {e}")
+
+    # Fast path 1: iCal feed (most reliable — structured, no LLM needed)
+    ical_url = (source.scrape_config or {}).get("ical_url")
+    if ical_url:
+        try:
+            from app.ingestion.venue_scraper import ICalScraperBase
+
+            class _DynamicICalScraper(ICalScraperBase):
+                source_name = source_slug
+                feed_url = ical_url
+                default_city = source.coverage_cities or ""
+
+            scraper = _DynamicICalScraper()
+            ical_events = await scraper.fetch_events()
+            if ical_events:
+                events = ical_events
+                logger.info(f"[scraper] {source_slug}: {len(events)} events via iCal feed")
+        except Exception as e:
+            logger.warning(f"[scraper] iCal fast path failed for {source_slug}: {e}")
+
+    # Fast path 2: try JSON-LD structured data via HTML fetch (independent of Crawl4AI)
+    if not events:
+        try:
+            from app.ingestion.scrapers.generic_jsonld import GenericJsonLdScraper
+            scraper = GenericJsonLdScraper()
+            scraper.source_name = source_slug
+            scraper.base_url = source.url
+            jsonld_events = await scraper.fetch_events()
+            if jsonld_events:
+                events = jsonld_events
+                logger.info(f"[scraper] {source_slug}: {len(events)} events via JSON-LD fast path")
+        except Exception as e:
+            logger.debug(f"[scraper] JSON-LD fast path failed for {source_slug}: {e}")
 
     # Slow path: Crawl4AI markdown fetch + LLM extraction
     if not events:
