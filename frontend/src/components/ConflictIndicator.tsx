@@ -27,8 +27,8 @@ export function ConflictIndicator({ conflicts, fieldLabel }: ConflictIndicatorPr
       {visible && (
         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 bg-gray-800 text-white text-xs rounded px-2 py-1.5 whitespace-nowrap z-10">
           <div className="font-semibold mb-1">{fieldLabel} across sources:</div>
-          {conflicts.map((c, i) => (
-            <div key={i}>{c.source}: {String(c.value)}</div>
+          {conflicts.map((c) => (
+            <div key={c.source}>{c.source}: {String(c.value)}</div>
           ))}
         </div>
       )}

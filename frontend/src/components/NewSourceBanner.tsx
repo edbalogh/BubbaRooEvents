@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 interface NewSourceBannerProps {
   count: number
   onDismiss: () => void
@@ -10,7 +12,7 @@ export function NewSourceBanner({ count, onDismiss }: NewSourceBannerProps) {
     <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center justify-between">
       <span className="text-sm text-green-800">
         <span className="font-medium">{count} new local event source{count > 1 ? 's' : ''}</span> discovered.{' '}
-        <a href="/sources" className="underline hover:text-green-900">View Sources →</a>
+        <Link to="/sources" className="underline hover:text-green-900">View Sources →</Link>
       </span>
       <button
         onClick={onDismiss}

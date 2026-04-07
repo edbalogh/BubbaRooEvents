@@ -1,23 +1,17 @@
-import { useState } from 'react'
-import { api } from '../api/client'
-
-interface Source {
-  id: number
-  slug: string
-  name: string
-  source_type: string
-  coverage_cities: string | null
-  is_local: boolean
-}
+import { useState, useEffect, useRef } from 'react'
+import { api, type EventSourceInfo } from '../api/client'
 
 interface SourceRowProps {
-  source: Source
+  source: EventSourceInfo
   onRefreshed: () => void
 }
 
 export function SourceRow({ source, onRefreshed }: SourceRowProps) {
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current) }, [])
 
   const handleRefresh = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -26,13 +20,21 @@ export function SourceRow({ source, onRefreshed }: SourceRowProps) {
     try {
       const { job_id } = await api.refreshSource(source.slug)
       // Poll until done
-      const poll = setInterval(async () => {
-        const status = await api.getSourceRefreshStatus(source.slug, job_id)
-        if (status.status === 'SUCCESS' || status.status === 'FAILURE') {
-          clearInterval(poll)
+      pollRef.current = setInterval(async () => {
+        try {
+          const status = await api.getSourceRefreshStatus(source.slug, job_id)
+          if (status.status === 'SUCCESS' || status.status === 'FAILURE') {
+            clearInterval(pollRef.current!)
+            pollRef.current = null
+            setRefreshing(false)
+            if (status.status === 'FAILURE') setRefreshError(status.error ?? 'Failed')
+            else onRefreshed()
+          }
+        } catch (err) {
+          clearInterval(pollRef.current!)
+          pollRef.current = null
           setRefreshing(false)
-          if (status.status === 'FAILURE') setRefreshError(status.error ?? 'Failed')
-          else onRefreshed()
+          setRefreshError(err instanceof Error ? err.message : 'Failed')
         }
       }, 2000)
     } catch (err) {
