@@ -47,6 +47,26 @@ export interface Event {
   image_url: string | null
   status: string
   categories: string[]
+  conflicts?: Record<string, { source: string; value: unknown }[]> | null
+  field_sources?: Record<string, string> | null
+}
+
+export interface CanonicalEventResponse {
+  id: string
+  title: string
+  description: string | null
+  venue_id: string | null
+  starts_at: string
+  ends_at: string | null
+  price_min: number | null
+  price_max: number | null
+  currency: string
+  url: string | null
+  image_url: string | null
+  categories: string[] | null
+  conflicts: Record<string, { source: string; value: unknown }[]> | null
+  field_sources: Record<string, string> | null
+  status: string
 }
 
 export interface EventListResponse {
@@ -391,6 +411,39 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ city }),
     })
+  },
+
+  // Source management
+  refreshSource(slug: string): Promise<{ job_id: string; status: string; source: string }> {
+    return request(`/sources/${encodeURIComponent(slug)}/refresh`, { method: 'POST' })
+  },
+
+  getSourceRefreshStatus(slug: string, jobId: string): Promise<{ job_id: string; status: string; result: string | null; error: string | null }> {
+    return request(`/sources/${encodeURIComponent(slug)}/refresh/${encodeURIComponent(jobId)}`)
+  },
+
+  runDiscovery(): Promise<{ job_id: string; status: string }> {
+    return request('/sources/discovery/run', { method: 'POST' })
+  },
+
+  getDiscoveryStatus(): Promise<{ last_new_source_discovered_at: string | null; total_discovered_sources: number }> {
+    return request('/sources/discovery/status')
+  },
+
+  // Duplicate management
+  flagDuplicate(eventAId: string, eventBId: string): Promise<void> {
+    return request('/events/duplicates', {
+      method: 'POST',
+      body: JSON.stringify({ event_a_id: eventAId, event_b_id: eventBId }),
+    })
+  },
+
+  mergeDuplicates(eventAId: string, eventBId: string): Promise<void> {
+    return request(`/events/duplicates/${eventAId}/merge/${eventBId}`, { method: 'POST' })
+  },
+
+  getFlaggedDuplicates(): Promise<CanonicalEventResponse[]> {
+    return request('/events/duplicates')
   },
 
   // MusicBrainz artist search (public API, called directly from frontend)
