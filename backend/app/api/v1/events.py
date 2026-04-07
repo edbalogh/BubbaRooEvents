@@ -1,10 +1,10 @@
 import hashlib
-import uuid as _uuid
 from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, update as sa_update
+from sqlalchemy import cast, func, select, update as sa_update
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.cache import (
@@ -19,7 +19,7 @@ from app.core.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.canonical_event import CanonicalEvent
 from app.models.event import RawEvent
-from app.schemas.event import CanonicalEventResponse, EventListResponse
+from app.schemas.event import CanonicalEventResponse, EventListResponse, FlagDuplicateRequest
 from app.services.event_service import get_event_by_id, get_tonight_events, search_events
 
 router = APIRouter(prefix="/events", tags=["events"])
@@ -79,62 +79,6 @@ async def tonight_events(
     return result
 
 
-@router.get("/{event_id}", response_model=CanonicalEventResponse)
-async def get_event(event_id: UUID, db: AsyncSession = Depends(get_db)):
-    event = await get_event_by_id(db, event_id)
-    if event is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
-    return CanonicalEventResponse.model_validate(event)
-
-
-@router.post("/duplicates")
-async def flag_duplicate(
-    event_a_id: _uuid.UUID,
-    event_b_id: _uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """User flags two canonical events as duplicates for review."""
-    for event_id in [event_a_id, event_b_id]:
-        result = await db.execute(select(CanonicalEvent).where(CanonicalEvent.id == event_id))
-        if not result.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
-    await db.execute(
-        sa_update(CanonicalEvent)
-        .where(CanonicalEvent.id == event_a_id)
-        .values(conflicts={"user_flagged_duplicate": str(event_b_id)})
-    )
-    await db.commit()
-    return {"status": "flagged", "event_a": str(event_a_id), "event_b": str(event_b_id)}
-
-
-@router.post("/duplicates/{event_a_id}/merge/{event_b_id}")
-async def merge_duplicates(
-    event_a_id: _uuid.UUID,
-    event_b_id: _uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Merge event_b into event_a. event_b is hidden; its raw_events relink to event_a."""
-    await db.execute(
-        sa_update(RawEvent)
-        .where(RawEvent.canonical_event_id == event_b_id)
-        .values(canonical_event_id=event_a_id)
-    )
-    await db.execute(
-        sa_update(CanonicalEvent)
-        .where(CanonicalEvent.id == event_b_id)
-        .values(status="merged", is_duplicate_of=event_a_id)
-    )
-    await db.commit()
-    try:
-        from worker.tasks.dedup import dedup_events
-        dedup_events.delay(limit=50)
-    except Exception:
-        pass
-    return {"status": "merged", "canonical": str(event_a_id), "merged": str(event_b_id)}
-
-
 @router.get("/duplicates")
 async def list_flagged_duplicates(
     db: AsyncSession = Depends(get_db),
@@ -156,3 +100,67 @@ async def list_flagged_duplicates(
         }
         for e in events
     ]
+
+
+@router.get("/{event_id}", response_model=CanonicalEventResponse)
+async def get_event(event_id: UUID, db: AsyncSession = Depends(get_db)):
+    event = await get_event_by_id(db, event_id)
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found")
+    return CanonicalEventResponse.model_validate(event)
+
+
+@router.post("/duplicates")
+async def flag_duplicate(
+    request: FlagDuplicateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """User flags two canonical events as duplicates for review."""
+    for event_id in [request.event_a_id, request.event_b_id]:
+        result = await db.execute(select(CanonicalEvent).where(CanonicalEvent.id == event_id))
+        if not result.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+    await db.execute(
+        sa_update(CanonicalEvent)
+        .where(CanonicalEvent.id == request.event_a_id)
+        .values(
+            conflicts=func.coalesce(CanonicalEvent.conflicts, cast({}, JSONB)).op("||")(
+                cast({"user_flagged_duplicate": str(request.event_b_id)}, JSONB)
+            )
+        )
+    )
+    await db.commit()
+    return {"status": "flagged", "event_a": str(request.event_a_id), "event_b": str(request.event_b_id)}
+
+
+@router.post("/duplicates/{event_a_id}/merge/{event_b_id}")
+async def merge_duplicates(
+    event_a_id: UUID,
+    event_b_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Merge event_b into event_a. event_b is hidden; its raw_events relink to event_a."""
+    for event_id in [event_a_id, event_b_id]:
+        check = await db.execute(select(CanonicalEvent).where(CanonicalEvent.id == event_id))
+        if not check.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail=f"Event {event_id} not found")
+    await db.execute(
+        sa_update(RawEvent)
+        .where(RawEvent.canonical_event_id == event_b_id)
+        .values(canonical_event_id=event_a_id)
+    )
+    await db.execute(
+        sa_update(CanonicalEvent)
+        .where(CanonicalEvent.id == event_b_id)
+        .values(status="merged", is_duplicate_of=event_a_id)
+    )
+    await db.commit()
+    try:
+        from worker.tasks.dedup import dedup_events
+        dedup_events.delay(limit=50)
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).debug(f"[events] Could not dispatch dedup task after merge: {e}")
+    return {"status": "merged", "canonical": str(event_a_id), "merged": str(event_b_id)}

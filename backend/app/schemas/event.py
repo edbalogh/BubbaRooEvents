@@ -47,11 +47,13 @@ class CanonicalEventResponse(BaseModel):
     conflicts: dict | None
     field_sources: dict | None
     status: str
-    # Denormalized from venue join (populated by service layer)
-    venue_name: str | None = None
-    venue_city: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+class FlagDuplicateRequest(BaseModel):
+    event_a_id: UUID
+    event_b_id: UUID
 
 
 class EventListResponse(BaseModel):

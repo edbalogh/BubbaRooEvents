@@ -27,9 +27,12 @@ def build_event_query(
     if city:
         query = (
             query
-            .join(Venue, CanonicalEvent.venue_id == Venue.id, isouter=True)
+            .join(Venue, CanonicalEvent.venue_id == Venue.id)
             .where(func.lower(Venue.city) == city.lower())
         )
+
+    if category:
+        query = query.where(CanonicalEvent.categories.contains([category]))
 
     if date_from:
         query = query.where(
@@ -92,7 +95,7 @@ async def get_tonight_events(db: AsyncSession, city: str) -> list[CanonicalEvent
 
     query = (
         select(CanonicalEvent)
-        .join(Venue, CanonicalEvent.venue_id == Venue.id, isouter=True)
+        .join(Venue, CanonicalEvent.venue_id == Venue.id)
         .where(
             and_(
                 CanonicalEvent.status == "active",
