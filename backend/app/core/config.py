@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # Discovery & scraping
     discovery_search_model: str = "gemma4:26b"
     discovery_extract_model: str = "gemma4:26b"
+    discovery_dedup_model: str = "qwen3.5:9b"  # smaller model fine for yes/no dedup check
     discovery_source_score_threshold: float = 0.7
     discovery_dedup_confidence_threshold: float = 0.8
     crawl4ai_timeout: int = 30

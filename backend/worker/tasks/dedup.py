@@ -99,7 +99,7 @@ def _raw_to_dict(raw: RawEvent) -> dict:
 
 async def _run_dedup_events(limit: int = 500) -> int:
     """Process unlinked raw events: resolve venues, find/create canonical events."""
-    llm = OllamaProvider(base_url=settings.ollama_base_url, model=settings.discovery_search_model)
+    llm = OllamaProvider(base_url=settings.ollama_base_url, model=settings.discovery_dedup_model)
     processed = 0
 
     async with _session_factory() as db:
@@ -108,7 +108,12 @@ async def _run_dedup_events(limit: int = 500) -> int:
         )
         unlinked = result.scalars().all()
 
-    for raw in unlinked:
+    logger.info(f"[dedup] Starting: {len(unlinked)} unlinked events to process (model: {settings.discovery_dedup_model})")
+    if not unlinked:
+        return 0
+
+    for i, raw in enumerate(unlinked, 1):
+        logger.info(f"[dedup] [{i}/{len(unlinked)}] Processing: {raw.title!r} ({raw.source}, {raw.city})")
         try:
             async with _session_factory() as db:
                 # Resolve venue
@@ -139,6 +144,7 @@ async def _run_dedup_events(limit: int = 500) -> int:
                         "title": candidate.title,
                         "starts_at": str(candidate.starts_at),
                     }
+                    logger.info(f"[dedup] LLM check: {raw.title!r} vs {candidate.title!r}")
                     is_dup = await are_duplicate_events(
                         llm, event_a, event_b,
                         confidence_threshold=settings.discovery_dedup_confidence_threshold,

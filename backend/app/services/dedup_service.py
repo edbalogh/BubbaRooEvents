@@ -169,5 +169,5 @@ async def are_duplicate_events(
             and result.get("confidence", 0) >= confidence_threshold
         )
     except Exception as e:
-        logger.warning(f"[dedup] LLM duplicate check failed: {e}")
+        logger.warning(f"[dedup] LLM duplicate check failed: {type(e).__name__}: {e}")
         return False
